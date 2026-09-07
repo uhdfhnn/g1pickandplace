@@ -78,7 +78,7 @@ SHOVEL_LIFT_HEIGHT_M = 0.12
 
 # The low scoop lane is raised by 0.022 m from the public table support plane
 # in the tool-root frame.  Gate-12 measured up to 0.941 mm of expanded
-# handle/table intrusion with the prior 0.021 m offset; the public-URDF sweep
+# finger-socket/table intrusion with the prior 0.021 m offset; the public-URDF sweep
 # still left -0.0418 mm at +0.0009 m, while +0.0010 m and larger cleared all
 # 22 fixed endpoints with maximum residual 9.987650206768576e-05.  The extra
 # millimetre is along world/tool +Z for the identity-oriented behind/lower/
@@ -92,10 +92,10 @@ SHOVEL_BLADE_ROOT_SUPPORT_OFFSET_M = 0.022
 # The pregrasp root rises by 0.75 of the fixed lift in dimensionless ratio,
 # along tool +Z (world +Z for the identity reset orientation).  Gate-08 swept
 # clearance found the previous 0.50 fraction left only 0.04 m of wrist height
-# after the local -0.02 m grasp offset, so the handle contacted the left
+# after the local -0.02 m grasp offset, so the socket rails contacted the left
 # wrist/yaw-pitch envelope in move_to_tool_pregrasp.  With 0.75, the root
 # offset is 0.09 m and the wrist offset is 0.07 m; this clears the 17.5 mm
-# handle half-thickness plus the 3 mm slip margin under the current reset
+# socket-rail half-height plus the 3 mm slip margin under the current reset
 # geometry.  A lower fraction can repeat the early collision; a higher one
 # adds descend distance and arm reach.  This fixed compile-time ratio requires
 # a fresh visible swept-clearance check and remains non-runtime/configurable.
@@ -112,47 +112,44 @@ SHOVEL_INSERT_DEPTH_M = 0.055
 # public 50 mm cube while its local -Y wedge points at the cube. It is the
 # 135 mm root-to-leading-edge distance plus the cube's 25 mm half extent and a
 # 10 mm air gap. Smaller values can begin in contact; larger values add reach
-# and insertion travel. Combined with the fixed 55 mm insertion, the handle's
-# forward edge remains 35 mm behind the cube centre (10 mm beyond its rear
-# face before the 3 mm margin), fixing the real handle/red overlap exposed by
-# visible plan 14. This reset-time value must pass visible swept-clearance and
-# contact validation and should be rederived if the public cube size changes.
+# and insertion travel. Combined with the fixed 55 mm insertion, the socket's
+# forward rail remains 35 mm behind the cube centre (10 mm beyond its rear face
+# before the 3 mm margin), fixing the real socket/red overlap exposed by visible
+# plan 14. This reset-time value must pass visible swept-clearance and contact
+# validation and should be rederived if the public cube size changes.
 SHOVEL_BEHIND_RED_OFFSET_M = 0.17
 
-# The scoop-lane root is shifted +0.035 m along public world +X relative to
+# The scoop-lane root is shifted +0.025 m along public world +X relative to
 # the red cube; X is horizontal screen-left in the approved front view, while
-# the behind-red Y offset above remains world +0.17 m.  The physical rollout
-# with local grasp X=-0.025 m established both exact finger contacts but lifted
-# the tool only 0.01551485 m before it slipped; wrist images showed the brown
-# handle still lateral/outside the closed finger pads.  The requested grasp
-# correction moves the wrist 20 mm farther toward tool-local -X.  During the
-# identity-oriented scoop phases, adding the same +20 mm in world +X to this
-# tool-root lane preserves the previously safe wrist centerline at
-# move_above_behind_red: (old tool X + 0.015) + (-0.025) equals
-# (new tool X + 0.035) + (-0.045).  This compensation specifically avoids
-# reusing the exact left-elbow/torso collision seen with local X=-0.045 and the
-# old +0.015 m lane.  Smaller lane offsets can restore that collision after the
-# grasp correction; larger offsets can lose blade/red lateral overlap, exceed
-# the public arm workspace, or make reset-time IK fail.  The +0.035 m world
-# offset is fixed for this coupled provisional calibration, not a runtime
-# adjustment, and requires visible inspect, all-waypoint Gate C swept
+# the behind-red Y offset above remains world +0.17 m.  The requested socket
+# grasp recenter changes the local grasp X from -0.045 m to -0.035 m, so the
+# fixed root lane moves -10 mm to preserve the existing world wrist centerline.
+# This sign assumes the identity-oriented scoop phases, where local/tool +X
+# equals world +X: (old root +0.035) + (-0.045) equals
+# (new root +0.025) + (-0.035).  The value is derived from the measured
+# rollout trace: open distal origins at step 600 were about local X=-53.9 and
+# +14.9 mm, while the closed origins at step 650 were about -12.7 and -5.8 mm.
+# The +10 mm wrist recenter puts both open fingers inside the two 42 mm socket
+# slots and lets closing converge on the 10 mm central rib.  A smaller lane
+# offset can restore the former left-elbow/torso collision; a larger offset can
+# lose blade/red lateral overlap, exceed the public arm workspace, or make
+# reset-time IK fail. This fixed coupled metre calibration is provisional, not
+# a runtime adjustment, and requires visible inspect, all-waypoint Gate C swept
 # clearance, and physical contact validation before acceptance.
-SHOVEL_SCOOP_LANE_X_OFFSET_M = 0.035
+SHOVEL_SCOOP_LANE_X_OFFSET_M = 0.025
 
-# The tray-loaded tool root receives a fixed +0.020 m compensation in public
-# world +X (metres; +X is presentation-left).  Gate-16 plan-only at grasp
-# X=-0.045 m and the uncompensated tray root failed transport IK after 32
-# seeds with residual 0.0109621.  The grasp correction moves the wrist -20 mm
-# in tool-local X, so shifting only the loaded/unload tray root +20 mm restores
-# the already-solved -0.025 m wrist centerline while leaving tray Y, Z, and
-# orientation unchanged.  This derivation assumes the authored identity
-# tool orientation through the root-X target and the current public tray
-# interior; too little compensation can retain the transport IK failure,
-# while too much can put the blade/block outside the tray interior or exceed
-# the arm workspace.  The value is fixed and provisional, never a runtime
-# adjustment, and must pass visible inspect, all-waypoint Gate C, and physical
-# tray-support validation.
-SHOVEL_TRAY_ROOT_X_COMPENSATION_M = 0.020
+# The tray-loaded tool root receives a fixed +0.010 m compensation in public
+# world +X (metres; +X is presentation-left). The same measured rollout trace
+# and +10 mm grasp recenter require shifting the loaded/unload tray root -10 mm
+# from the former +0.020 m so the fixed wrist centerline is unchanged:
+# (old tray root +0.020) + (-0.045) equals (new tray root +0.010) + (-0.035).
+# This derivation assumes the authored identity tool orientation through the
+# root-X target and the current public tray interior; too little compensation
+# can retain the transport IK failure, while too much can put the blade/block
+# outside the tray interior or exceed the arm workspace. The value is fixed and
+# provisional, never a runtime adjustment, and must pass visible inspect,
+# all-waypoint Gate C, and physical tray-support validation.
+SHOVEL_TRAY_ROOT_X_COMPENSATION_M = 0.010
 
 # The tool tilt is a fixed -35 degree rotation about world X, represented as a
 # unit quaternion in xyzw order. This lifts the local -Y blade leading edge
@@ -165,58 +162,55 @@ SHOVEL_TILT_QUATERNION_XYZW = (
     0.9537169507482269,
 )
 
-# This fixed profile describes the repository-owned USDA compound tool. Sizes
-# are full extents in metres in the tool-root local frame: handle along +Y,
-# blade width +X, and blade normal +Z. The child colliders are all fixed to one
-# dynamic root in the USD; duplicating them as simulator objects would create
-# an unphysical disconnected tool. Gate-11 fixed the centred handle X/Y size
-# at 35x150 mm after the 160 mm version overlapped the public torso AABB by
-# 2.97 mm along world Y. Aborted visible rollout-04 then measured finger-center
-# heights z=0.845119655 m and z=0.844903827 m at tool_grasp_settle step 650,
-# only 0.216 mm apart, while the old 35 mm handle top was root z=0.812175 m
-# + 0.0175 m = 0.829675 m, about 15.3 mm below those centres. Gate20 rejected
-# the resulting 50 mm candidate before rollout: its upper envelope created 66
-# exact left-elbow overlaps during tilt_blade_up. The 45 mm candidate lowers
-# that upper envelope by 5 mm while retaining the fixed bottom and leaving an
-# estimated 5.3 mm gap to the rollout-04 finger centres. Its root-local bottom
-# remains -0.0175 m and its top is +0.0275 m, exactly 10 mm above the old top,
-# from a +0.005 m translation and 0.0225 m half-height. A lower handle can
-# remain below the finger centers and fail to grasp; a taller one can repeat
-# the exact elbow collision or enter the table/fingers. This fixed
-# asset/profile geometry is provisional pending visible reset/viewport,
-# all-waypoint Gate C swept-clearance, and physical grasp validation.
-SHOVEL_HANDLE_SIZE_M = (0.035, 0.15, 0.045)
+# This fixed profile describes the repository-owned USDA compound tool. All
+# dimensions are full extents in metres in the tool-root local frame: tool-local
+# +X is lateral/closing, -Y points toward the blade/front, and +Z is up. The
+# five socket rails, blade, and backstop are fixed under one dynamic USD root;
+# duplicating them as simulator objects would create disconnected physics.
+# The socket rail span is 60 mm in local Y and 40 mm in local Z. Its 8 mm outer
+# rails and 10 mm central rib leave two real 42x44 mm vertical openings rather
+# than a filled grasp block. These exact dimensions are sourced from the
+# dual-hole socket design and require visible reset/viewport, all-waypoint
+# Gate C swept-clearance, and physical grasp validation after asset changes.
+SHOVEL_SOCKET_RAIL_SIZE_M = (0.008, 0.060, 0.040)
+SHOVEL_SOCKET_RIB_SIZE_M = (0.010, 0.060, 0.040)
+SHOVEL_SOCKET_HOLE_SIZE_M = (0.042, 0.044)
+SHOVEL_SOCKET_OUTER_RAIL_CENTER_X_M = 0.051
+SHOVEL_SOCKET_FRONT_RAIL_CENTER_Y_M = -0.116
+SHOVEL_SOCKET_REAR_RAIL_CENTER_Y_M = -0.064
+SHOVEL_SOCKET_RAIL_CENTER_Z_M = 0.011
+SHOVEL_SOCKET_BOUNDS_MIN_LOCAL_M = (-0.055, -0.120, -0.009)
+SHOVEL_SOCKET_BOUNDS_MAX_LOCAL_M = (0.055, -0.060, 0.031)
+SHOVEL_SOCKET_LEFT_HOLE_BOUNDS_LOCAL_M = ((-0.047, -0.112), (-0.005, -0.068))
+SHOVEL_SOCKET_RIGHT_HOLE_BOUNDS_LOCAL_M = ((0.005, -0.112), (0.047, -0.068))
 SHOVEL_BLADE_SIZE_M = (0.09, 0.075, 0.006)
 SHOVEL_BACKSTOP_SIZE_M = (0.09, 0.012, 0.035)
 
-# The local compound bounds conservatively enclose handle, blade, and backstop
-# (metres, tool-root frame). The front blade is toward local -Y; this matches
-# the authored scene pose that places its front near the red block. Bounds are
-# intentionally wider than each primitive so transformed AABB checks cannot
-# under-approximate a child collider. The +0.030 m compound Z maximum encloses
-# the updated handle top at +0.0275 m with a fixed 2.5 mm conservative pad;
-# reducing it could miss handle/table or robot contact, while increasing it can
-# reject a reachable path unnecessarily. This bound is fixed to the authored
-# asset and must be rechecked by the same visible swept-clearance gate.
-SHOVEL_COMPOUND_BOUNDS_MIN_M = (-0.045, -0.135, -0.018)
-SHOVEL_COMPOUND_BOUNDS_MAX_M = (0.045, 0.080, 0.030)
+# The local compound bounds conservatively enclose the socket, blade, and
+# backstop (metres, tool-root frame). The source child union is approximately
+# X=[-0.055,+0.055], Y=[-0.135,-0.046], Z=[-0.0175,+0.031]. The required
+# conservative bounds add 3 mm pads on X and blade-forward Y, keep a 0.5 mm
+# floor pad on Z, and add 3 mm above the socket: this yields the exact
+# min=(-0.058,-0.138,-0.018), max=(+0.058,-0.043,+0.034) contract. Tightening
+# a pad can miss socket/blade/backstop slip or robot/table contact; widening it
+# can reject a reachable scoop corridor. This fixed asset/profile envelope is
+# provisional and must be rechecked by the visible swept-clearance gate.
+SHOVEL_COMPOUND_BOUNDS_MIN_M = (-0.058, -0.138, -0.018)
+SHOVEL_COMPOUND_BOUNDS_MAX_M = (0.058, -0.043, 0.034)
 
-# The component bounds are full local-metre collision envelopes copied from
-# the repository USDA: the 35x150x45 mm handle, 90x75 mm wedge, and 90x12x35
-# mm backstop. The handle's local Y bounds are centred at [-0.075,+0.075] m;
-# its local Z bounds are [-0.0175,+0.0275] m after the authored +0.005 m
-# translation and 0.0225 m half-height. The compound max-Y remains +0.080 m to
-# retain the existing 5 mm conservative enclosure pad, and its max-Z remains
-# +0.030 m for a 2.5 mm pad above the new handle top. These bounds let
-# preflight exempt only the named contact surface instead of exempting the
-# whole compound tool. If they differ from the asset, preflight can either
-# miss a collision or reject a safe plan, so the asset/profile fingerprint and
-# dependency-light tests keep them fixed.
+# Component bounds are full local-metre collision envelopes copied from the
+# repository USDA. The finger_socket entry is the exact outer socket envelope,
+# including empty holes, while blade and backstop retain their authored bounds.
+# Keeping the socket AABB conservative is intentional for preflight: the USD
+# rails remain the real collision geometry and no solid hole filler is added.
+# A mismatch can miss a rail/table or robot collision or reject a safe path, so
+# the asset/profile fingerprint and dependency-light tests keep these values
+# fixed for this design.
 SHOVEL_COMPONENT_BOUNDS_LOCAL_M: Mapping[
     str, tuple[tuple[float, float, float], tuple[float, float, float]]
 ] = MappingProxyType(
     {
-        "handle": ((-0.0175, -0.075, -0.0175), (0.0175, 0.075, 0.0275)),
+        "finger_socket": (SHOVEL_SOCKET_BOUNDS_MIN_LOCAL_M, SHOVEL_SOCKET_BOUNDS_MAX_LOCAL_M),
         "blade": ((-0.045, -0.135, -0.017), (0.045, -0.060, -0.009)),
         "backstop": ((-0.045, -0.058, -0.0175), (0.045, -0.046, 0.0175)),
     }
@@ -230,50 +224,44 @@ SHOVEL_COMPONENT_BOUNDS_LOCAL_M: Mapping[
 # calibration and never changes the runtime trajectory.
 SHOVEL_TOOL_SLIP_MARGIN_M = 0.003
 
-# The local wrist frame is 45 mm toward local -X, 60 mm along local +Y, and
-# 20 mm below the tool root in local +Z, all in metres.  Local +Y runs along
-# the handle toward its rear end, so +0.060 m is 15 mm inward from the former
-# +0.075 m rear-face target.  With X=-0.045 m, the exact Gate-18 reset sweep
-# using public Pinocchio/HPP-FCL and 32 deterministic alternates found
+# The local wrist frame is 35 mm toward local -X, 60 mm along local +Y, and
+# 20 mm below the tool root in local +Z, all in metres. Local +Y runs along the
+# socket toward its rear rail, so +0.060 m remains 15 mm inward from the
+# former +0.075 m rear-face target. Public Pinocchio/HPP-FCL reset sweeps found
 # y=+0.075 m failed at move_above_behind_red (torso/left_wrist_roll), while
-# y=+0.070 m and +0.060 m passed all waypoints with maximum residuals
-# 9.90046948e-05 and 9.98203362e-05; y=+0.050 m failed descend with residual
-# 0.0173476, and +0.040, +0.030, +0.020, and 0.000 m also failed descend.
-# The selected +0.060 m therefore retains 10 mm above the observed lower
-# failure boundary while moving the grasp inward from the handle end.  This
-# Y correction is coupled to the physical rollout-02 evidence used for X:
-# both exact finger contacts were true at Y=+0.075 m, but tool-root lift was
-# only 0.01551485 m before slip and wrist frames showed the brown handle
-# lateral/outside the closed pads.  Smaller Y can lose handle enclosure or
-# descend-time IK; larger Y can restore the torso/wrist collision or leave the
-# handle outside the pads.  The -0.045 m X, -0.020 m local-Z, -30 degree
-# orientation, +0.035 m scoop lane, +0.020 m tray compensation, and 3 mm slip
-# envelope remain unchanged.  This fixed coupled frame is provisional, not
-# runtime-configurable, and requires visible reset/viewport, all-waypoint Gate
-# C swept clearance, and physical contact validation before acceptance.
+# y=+0.070 m and +0.060 m passed all waypoints; the lower +0.050 m boundary
+# failed descend. The requested +10 mm local-X recenter is derived from the
+# measured rollout trace: open distal finger origins at step 600 were about
+# local x=-53.9/+14.9 mm (68.8 mm apart), and closed origins at step 650 were
+# about -12.7/-5.8 mm (6.9 mm apart). Moving the wrist to X=-0.035 m puts both
+# open fingers within the two 42 mm socket slots and lets closing converge on
+# the 10 mm central rib. Smaller X recenter can leave a finger outside a slot;
+# larger recenter can press the central rib or lose wrist/table clearance. This
+# fixed coupled frame is provisional, not runtime-configurable, and requires
+# visible reset/viewport, all-waypoint Gate C swept clearance, and physical
+# contact validation before acceptance.
 # Raising local +Z from -0.030 to -0.020 m raises the wrist 10 mm along the
 # tool's +Z axis (which equals world +Z through the identity-oriented scoop
 # phases);
 # the bracketing Z=-0.025 m candidate failed the strict 1e-4 residual gate with
 # residual 0.000161265, while Z=-0.015 m moved into torso/shoulder collision.
-# Lower Z can press the palm/body into the handle; higher Z can lose contact
+# Lower Z can press the palm/body into the socket rails; higher Z can lose contact
 # or exceed the vertical grasp envelope.  This fixed provisional calibration
 # requires visible reset/viewport, all-waypoint Gate C, and physical contact
 # validation before acceptance.
-SHOVEL_TOOL_LOCAL_GRASP_POSITION_M = (-0.045, 0.060, -0.02)
+SHOVEL_TOOL_LOCAL_GRASP_POSITION_M = (-0.035, 0.060, -0.02)
 # This -30 degree pitch is a signed angle in degrees about tool-local +Y (also
 # world +Y while the tool is at its identity reset orientation, along the
-# handle's long axis).  At rollout-03 ``tool_grasp_settle`` step 650, the two
+# socket's long axis). At rollout-03 ``tool_grasp_settle`` step 650, the two
 # named finger links were separated by dx=-43.198 mm and dz=27.409 mm; the
 # angle arctan2(27.409, 43.198) is about +32.4 degrees, so a -30 degree
 # world-Y correction leaves a small residual vertical mismatch instead of
-# requiring the exact diagonal.  The angle is fixed from that measured trace,
-# not estimated at runtime.  A smaller magnitude can leave the old flat 35
-# mm-high handle diagonal to the closing line; a larger magnitude
-# can rotate the fingers into the handle/table, alter the blade approach, or
-# make IK and collision gates fail.  This provisional angle remains fixed and
-# requires visible inspect, all-waypoint Gate C, and physical contact
-# validation.
+# requiring the exact diagonal. The angle is fixed from that measured trace,
+# not estimated at runtime. A smaller magnitude can leave the socket rail
+# diagonal to the closing line; a larger magnitude can rotate the fingers into
+# the socket/table, alter the blade approach, or make IK and collision gates
+# fail. This provisional angle remains fixed and requires visible inspect,
+# all-waypoint Gate C, and physical contact validation.
 SHOVEL_GRASP_Y_ROTATION_DEG = -30.0
 
 # This named unit quaternion is the xyzw representation of the fixed -30
@@ -296,7 +284,7 @@ SHOVEL_GRASP_Y_ROTATION_QUATERNION_XYZW = (
 # (0.1830127019,-0.1830127019,-0.6830127019,0.6830127019).  This composition
 # assumes active rigid-pose multiplication in ``Pose.compose`` and preserves
 # the prior yaw while changing only the closing-line pitch.  A sign/order
-# reversal would tilt the handle the opposite way and retain the measured
+# reversal would tilt the socket the opposite way and retain the measured
 # vertical mismatch or create a table/blade collision; the value is fixed and
 # provisional pending the visible reset/IK/clearance gates and contact trace.
 SHOVEL_TOOL_LOCAL_GRASP_QUATERNION_XYZW = (
@@ -405,8 +393,10 @@ class ShovelToolProfile:
             if np.any(np.asarray(minimum) >= np.asarray(maximum)):
                 raise ValueError(f"{component} component bounds must have min < max")
             components[str(component)] = (minimum, maximum)
-        if set(components) != {"handle", "blade", "backstop"}:
-            raise ValueError("component bounds must define exactly handle, blade, and backstop")
+        if set(components) != {"finger_socket", "blade", "backstop"}:
+            raise ValueError(
+                "component bounds must define exactly finger_socket, blade, and backstop"
+            )
         if not np.isfinite(self.slip_margin_m) or self.slip_margin_m < 0.0:
             raise ValueError("slip_margin_m must be finite and non-negative metres")
         object.__setattr__(self, "component_bounds_local_m", MappingProxyType(components))
@@ -415,7 +405,7 @@ class ShovelToolProfile:
     def default(cls, asset_path: str) -> "ShovelToolProfile":
         """Create the public analytic profile for the repository-owned USDA."""
 
-        # Blade contact bounds deliberately exclude the handle/backstop.  They
+        # Blade contact bounds deliberately exclude the finger_socket/backstop. They
         # are local metres and cover the shallow blade plus a 1 mm envelope;
         # this is a conservative contact-provenance mask, not a control rule.
         return cls(
@@ -638,33 +628,33 @@ SHOVEL_GRASP_CONTACT_START_PHASE = "descend_to_tool_grasp"
 # the table, leaving that support, or returning to it. Table contact by any
 # component is therefore intentional only here. Scoop phases are deliberately
 # absent: ``lower_blade``/``insert_blade`` may exempt the blade alone, so a
-# handle or backstop/table overlap still fails. The labels come from the frozen
+# finger_socket or backstop/table overlap still fails. The labels come from the frozen
 # program and cannot be selected by runtime contact.
 # This per-phase component map is intentionally more precise than a whole-tool
-# table exemption. ``handle``/``blade``/``backstop`` are geometry labels, not
+# table exemption. ``finger_socket``/``blade``/``backstop`` are geometry labels, not
 # runtime observations. All three may overlap the conservative 3 mm-expanded
 # envelope while the 120 g shovel rests on or leaves the table.  During the
 # scoop, only the blade and its 18 mm-high rear backstop may skim the support
-# plane; the handle remains collision-fatal.  These entries were derived from
-# the public compound USD dimensions and the 2026-09-06 visible plan-only
-# traces (plan 12: reset support; plan 13: insert samples 19--34).  Removing a
-# required entry produces false preflight failures; adding ``handle`` to a
+# plane; the finger socket remains collision-fatal. These entries were derived
+# from the public compound USD dimensions and the 2026-09-06 visible plan-only
+# traces (plan 12: reset support; plan 13: insert samples 19--34). Removing a
+# required entry produces false preflight failures; adding ``finger_socket`` to a
 # scoop phase could hide a physically invalid downward wrist pose.  The map is
 # fixed for this asset/profile and should become configurable if either changes.
 SHOVEL_TABLE_CONTACT_COMPONENTS_BY_PHASE: Mapping[str, frozenset[str]] = MappingProxyType(
     {
-        "open_at_home": frozenset({"handle", "blade", "backstop"}),
-        "staging": frozenset({"handle", "blade", "backstop"}),
-        "move_to_tool_pregrasp": frozenset({"handle", "blade", "backstop"}),
-        "descend_to_tool_grasp": frozenset({"handle", "blade", "backstop"}),
-        "close_tool_gripper": frozenset({"handle", "blade", "backstop"}),
-        "tool_grasp_settle": frozenset({"handle", "blade", "backstop"}),
-        "lift_tool": frozenset({"handle", "blade", "backstop"}),
+        "open_at_home": frozenset({"finger_socket", "blade", "backstop"}),
+        "staging": frozenset({"finger_socket", "blade", "backstop"}),
+        "move_to_tool_pregrasp": frozenset({"finger_socket", "blade", "backstop"}),
+        "descend_to_tool_grasp": frozenset({"finger_socket", "blade", "backstop"}),
+        "close_tool_gripper": frozenset({"finger_socket", "blade", "backstop"}),
+        "tool_grasp_settle": frozenset({"finger_socket", "blade", "backstop"}),
+        "lift_tool": frozenset({"finger_socket", "blade", "backstop"}),
         "lower_blade": frozenset({"blade", "backstop"}),
         "insert_blade": frozenset({"blade", "backstop"}),
         "tilt_blade_up": frozenset({"blade", "backstop"}),
-        "return_home": frozenset({"handle", "blade", "backstop"}),
-        "final_evaluation_settle": frozenset({"handle", "blade", "backstop"}),
+        "return_home": frozenset({"finger_socket", "blade", "backstop"}),
+        "final_evaluation_settle": frozenset({"finger_socket", "blade", "backstop"}),
     }
 )
 
@@ -1016,7 +1006,7 @@ def validate_shovel_swept_clearance(
                         token in label.casefold()
                         for token in SHOVEL_ALLOWED_GRASP_ROBOT_TOKENS
                     )
-                    and component == "handle"
+                    and component == "finger_socket"
                     and SHOVEL_PHASES.index(phase)
                     >= SHOVEL_PHASES.index(SHOVEL_GRASP_CONTACT_START_PHASE)
                 )
@@ -1039,7 +1029,10 @@ def validate_shovel_swept_clearance(
                             robot_check_complete=True,
                         )
                     samples += 1
-                    if contact_allowed(label, component) or hand_grasp_allowed(label, component):
+                    # Static scene objects can never be the robot grasp links.
+                    # In particular, do not interpret a scene label containing
+                    # ``hand`` or ``wrist`` as an intended finger/socket contact.
+                    if contact_allowed(label, component):
                         continue
                     if _overlap(tool_min, tool_max, other_min, other_max):
                         failures.append(
@@ -1055,7 +1048,7 @@ def validate_shovel_swept_clearance(
 
                 # Exact HPP-FCL results, not the optional robot AABB overlap,
                 # decide robot collisions. A true elbow/torso result remains
-                # fatal; only the existing post-grasp handle hand/wrist mask
+                # fatal; only the existing post-grasp finger-socket hand/wrist mask
                 # can exempt it.
                 for label in sorted(exact_labels):
                     if broad_by_label is not None:
@@ -1174,7 +1167,7 @@ def _phase_tool_targets(
     # 17 mm local bottom plus the 3 mm slip envelope, the named 22 mm root
     # offset puts the conservative leading lip 2 mm above the table without
     # disabling collision and keeps the 17.5 mm backstop clear. Gate-12's
-    # measured 0.941 mm expanded handle/table intrusion at 21 mm motivates
+    # measured 0.941 mm expanded finger-socket/table intrusion at 21 mm motivates
     # this fixed 1 mm lift; the 45 mm clear approach is below
     # the cube top but keeps the wedge off the table until ``lower_blade``;
     # both are fixed geometry-derived positions, not observed contact waits.
@@ -1202,12 +1195,13 @@ def _phase_tool_targets(
     lower = behind + np.asarray([0.0, 0.0, -0.045])
     insert = lower + np.asarray([0.0, -config.insert_depth_m, 0.0])
     # Raising the root 60 mm while applying the fixed -X tilt keeps the
-    # 150 mm handle's +Y rear end above the 0.794051 m support plane: at 35
-    # degrees it swings down about 46 mm, plus its 9 mm half-thickness and the
-    # 3 mm preflight margin. The prior 20 mm rise produced a real handle/table
-    # overlap in visible plan 15. Less than roughly 58 mm can strike the table;
-    # much more consumes arm workspace. This fixed lift is geometry-derived
-    # for the current handle and must be recalibrated if its length changes.
+    # 60 mm socket +Y rear rail above the 0.794051 m support plane: at 35
+    # degrees the socket envelope swings down, plus its 20 mm half-height and
+    # the 3 mm preflight margin. The prior 20 mm rise produced a real
+    # finger-socket/table overlap in visible plan 15. Less than roughly 58 mm
+    # can strike the table; much more consumes arm workspace. This fixed lift is
+    # geometry-derived for the current socket and must be recalibrated if its
+    # rail dimensions change.
     tilted = _rotated_tool_pose(
         insert + np.asarray([0.0, 0.0, 0.06]),
         SHOVEL_TILT_QUATERNION_XYZW,
@@ -1370,6 +1364,17 @@ __all__ = [
     "SHOVEL_RESET_WRIST_PHASES",
     "SHOVEL_BLADE_ROOT_SUPPORT_OFFSET_M",
     "SHOVEL_PREGRASP_HEIGHT_FRACTION",
+    "SHOVEL_SOCKET_RAIL_SIZE_M",
+    "SHOVEL_SOCKET_RIB_SIZE_M",
+    "SHOVEL_SOCKET_HOLE_SIZE_M",
+    "SHOVEL_SOCKET_OUTER_RAIL_CENTER_X_M",
+    "SHOVEL_SOCKET_FRONT_RAIL_CENTER_Y_M",
+    "SHOVEL_SOCKET_REAR_RAIL_CENTER_Y_M",
+    "SHOVEL_SOCKET_RAIL_CENTER_Z_M",
+    "SHOVEL_SOCKET_BOUNDS_MIN_LOCAL_M",
+    "SHOVEL_SOCKET_BOUNDS_MAX_LOCAL_M",
+    "SHOVEL_SOCKET_LEFT_HOLE_BOUNDS_LOCAL_M",
+    "SHOVEL_SOCKET_RIGHT_HOLE_BOUNDS_LOCAL_M",
     "SHOVEL_SCOOP_LANE_X_OFFSET_M",
     "SHOVEL_TRAY_ROOT_X_COMPENSATION_M",
     "SHOVEL_GRASP_Y_ROTATION_DEG",

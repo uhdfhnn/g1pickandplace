@@ -413,9 +413,9 @@ SHOVEL_HAND_ACTUATOR_GROUP_NAME = "hands"
 # N*m/rad and damping is N*m*s/rad.  The public G129 ``hands`` group supplies
 # 800.0 N*m/rad and 3.0 N*m*s/rad to all four Dex1 joints.  Doubling only the
 # left values to 1600.0 and 6.0 is a bounded 2x feed-forward calibration for
-# the observed one-sided handle push; too little gain can let the handle slip
+# the observed one-sided socket push; too little gain can let the socket slip
 # during the fixed close/lift program, while too much gain can increase contact
-# impulse or elbow/handle collision risk.  These values are intentionally
+# impulse or elbow/socket collision risk.  These values are intentionally
 # fixed for this shovel candidate (not a CLI control) and require visible
 # inspect/plan plus physical contact/lift validation; right-hand values stay at
 # the public upstream gains so Task 1--3 behavior is unchanged.
@@ -436,7 +436,7 @@ SHOVEL_HAND_ACTUATOR_RUNTIME_ATOL = 1.0e-6
 # The repository-owned USD compound has one root mass in SI kilograms.  The
 # 0.12 kg value is a provisional public primitive calibration: too heavy can
 # exceed Dex1 grip force, while too light can be impulsive under contact.  USD
-# child handle/blade/backstop colliders remain fixed to this root and never
+# child socket/blade/backstop colliders remain fixed to this root and never
 # become separate dynamic bodies or attachments.
 SHOVEL_TOOL_MASS_KG = 0.12
 
@@ -4082,7 +4082,7 @@ def _configure_shovel_scene(env_cfg: Any) -> dict[str, Any]:
             f"{SHOVEL_TOOL_ASSET_PATH}, {SHOVEL_TRAY_ASSET_PATH}"
         )
     # ``RigidObjectCfg`` plus public ``UsdFileCfg`` gives exactly one dynamic
-    # root body.  Handle, shallow blade, and backstop colliders live under that
+    # root body.  The dual-finger socket, shallow blade, and backstop colliders live under that
     # root in the USDA and therefore share one physical pose; no joint, weld,
     # attachment, or post-reset pose write is created here.
     scene.shovel_tool = RigidObjectCfg(
@@ -4176,8 +4176,11 @@ def _configure_shovel_scene(env_cfg: Any) -> dict[str, Any]:
         },
         "dynamic_root": "shovel_tool",
         "fixed_child_colliders": (
-            "handle",
-            "transverse_grip",
+            "left_outer_rail",
+            "right_outer_rail",
+            "central_rib",
+            "front_rail",
+            "rear_rail",
             "shallow_wedge_blade",
             "backstop",
         ),

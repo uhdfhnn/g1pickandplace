@@ -11,14 +11,25 @@ from g1pickplace import OpenLoopPolicy, Pose
 from g1pickplace.shovel_planner import (
     SHOVEL_BLADE_ROOT_SUPPORT_OFFSET_M,
     SHOVEL_INTENDED_CONTACTS_BY_PHASE,
+    SHOVEL_COMPOUND_BOUNDS_MIN_M,
     SHOVEL_COMPOUND_BOUNDS_MAX_M,
     SHOVEL_COMPONENT_BOUNDS_LOCAL_M,
     SHOVEL_GRASP_Y_ROTATION_DEG,
     SHOVEL_GRASP_Y_ROTATION_QUATERNION_XYZW,
-    SHOVEL_HANDLE_SIZE_M,
     SHOVEL_PREGRASP_HEIGHT_FRACTION,
     SHOVEL_PHASES,
     SHOVEL_SCOOP_LANE_X_OFFSET_M,
+    SHOVEL_SOCKET_BOUNDS_MAX_LOCAL_M,
+    SHOVEL_SOCKET_BOUNDS_MIN_LOCAL_M,
+    SHOVEL_SOCKET_FRONT_RAIL_CENTER_Y_M,
+    SHOVEL_SOCKET_HOLE_SIZE_M,
+    SHOVEL_SOCKET_LEFT_HOLE_BOUNDS_LOCAL_M,
+    SHOVEL_SOCKET_OUTER_RAIL_CENTER_X_M,
+    SHOVEL_SOCKET_RAIL_CENTER_Z_M,
+    SHOVEL_SOCKET_RAIL_SIZE_M,
+    SHOVEL_SOCKET_REAR_RAIL_CENTER_Y_M,
+    SHOVEL_SOCKET_RIB_SIZE_M,
+    SHOVEL_SOCKET_RIGHT_HOLE_BOUNDS_LOCAL_M,
     SHOVEL_TRAY_ROOT_X_COMPENSATION_M,
     SHOVEL_TOOL_LOCAL_GRASP_POSITION_M,
     SHOVEL_TOOL_LOCAL_GRASP_QUATERNION_XYZW,
@@ -76,9 +87,16 @@ def test_public_assets_have_one_dynamic_root_and_static_open_tray() -> None:
     tool_text = ASSET.read_text(encoding="utf-8")
     tray_text = TRAY_ASSET.read_text(encoding="utf-8")
     assert tool_text.count("PhysicsRigidBodyAPI") == 1
-    for child in ("handle", "backstop"):
+    for child in (
+        "left_outer_rail",
+        "right_outer_rail",
+        "central_rib",
+        "front_rail",
+        "rear_rail",
+        "backstop",
+    ):
         assert f'Cube "{child}"' in tool_text
-    assert 'transverse_grip' not in tool_text
+    assert tool_text.count('rel material:binding:physics = </ShovelTool/GripPhysicsMaterial>') == 5
     assert 'Mesh "shallow_wedge_blade"' in tool_text
     assert 'physics:approximation = "convexHull"' in tool_text
     assert 'PhysicsCollisionAPI' in tool_text
@@ -87,33 +105,55 @@ def test_public_assets_have_one_dynamic_root_and_static_open_tray() -> None:
         assert f'Cube "{child}"' in tray_text
 
 
-def test_handle_asset_scale_bounds_and_grasp_frame_match_gate11() -> None:
+def test_dual_finger_socket_asset_bounds_and_grasp_frame_match() -> None:
     tool_text = ASSET.read_text(encoding="utf-8")
-    assert "float3 xformOp:translate = (0.0, 0.0, 0.005)" in tool_text
-    assert "float3 xformOp:scale = (0.0175, 0.075, 0.0225)" in tool_text
-    assert 'xformOpOrder = ["xformOp:translate", "xformOp:scale"]' in tool_text
-    assert SHOVEL_HANDLE_SIZE_M == (0.035, 0.15, 0.045)
-    assert SHOVEL_COMPONENT_BOUNDS_LOCAL_M["handle"] == (
-        (-0.0175, -0.075, -0.0175),
-        (0.0175, 0.075, 0.0275),
+    rail_names = (
+        "left_outer_rail",
+        "right_outer_rail",
+        "central_rib",
+        "front_rail",
+        "rear_rail",
     )
-    assert SHOVEL_COMPOUND_BOUNDS_MAX_M[1] == 0.080
-    assert SHOVEL_COMPOUND_BOUNDS_MAX_M[2] == 0.030
-    handle_bounds = SHOVEL_COMPONENT_BOUNDS_LOCAL_M["handle"]
-    # The authored +5 mm translation and 22.5 mm half-height preserve the old
-    # -17.5 mm bottom while raising the old +17.5 mm top by exactly 10 mm.
-    assert handle_bounds[0][2] == pytest.approx(-0.0175)
-    assert handle_bounds[1][2] == pytest.approx(0.0275)
-    assert handle_bounds[1][2] - 0.0175 == pytest.approx(0.010)
+    # Each rail is a colliding child under the one dynamic root. The central
+    # rib and four perimeter rails leave two empty cavities; no solid primitive
+    # is allowed to occupy either socket opening.
+    assert tool_text.count('def Cube "') == 6
+    for rail in rail_names:
+        assert f'def Cube "{rail}"' in tool_text
+        assert tool_text.count(f'def Cube "{rail}"') == 1
+    assert SHOVEL_SOCKET_RAIL_SIZE_M == (0.008, 0.060, 0.040)
+    assert SHOVEL_SOCKET_RIB_SIZE_M == (0.010, 0.060, 0.040)
+    assert SHOVEL_SOCKET_HOLE_SIZE_M == (0.042, 0.044)
+    assert SHOVEL_SOCKET_OUTER_RAIL_CENTER_X_M == pytest.approx(0.051)
+    assert SHOVEL_SOCKET_FRONT_RAIL_CENTER_Y_M == pytest.approx(-0.116)
+    assert SHOVEL_SOCKET_REAR_RAIL_CENTER_Y_M == pytest.approx(-0.064)
+    assert SHOVEL_SOCKET_RAIL_CENTER_Z_M == pytest.approx(0.011)
+    assert SHOVEL_SOCKET_BOUNDS_MIN_LOCAL_M == (-0.055, -0.120, -0.009)
+    assert SHOVEL_SOCKET_BOUNDS_MAX_LOCAL_M == (0.055, -0.060, 0.031)
+    assert SHOVEL_COMPONENT_BOUNDS_LOCAL_M["finger_socket"] == (
+        SHOVEL_SOCKET_BOUNDS_MIN_LOCAL_M,
+        SHOVEL_SOCKET_BOUNDS_MAX_LOCAL_M,
+    )
+    assert SHOVEL_SOCKET_LEFT_HOLE_BOUNDS_LOCAL_M == ((-0.047, -0.112), (-0.005, -0.068))
+    assert SHOVEL_SOCKET_RIGHT_HOLE_BOUNDS_LOCAL_M == ((0.005, -0.112), (0.047, -0.068))
+    for hole_min, hole_max in (
+        SHOVEL_SOCKET_LEFT_HOLE_BOUNDS_LOCAL_M,
+        SHOVEL_SOCKET_RIGHT_HOLE_BOUNDS_LOCAL_M,
+    ):
+        assert hole_max[0] - hole_min[0] == pytest.approx(SHOVEL_SOCKET_HOLE_SIZE_M[0])
+        assert hole_max[1] - hole_min[1] == pytest.approx(SHOVEL_SOCKET_HOLE_SIZE_M[1])
+    assert SHOVEL_COMPOUND_BOUNDS_MIN_M == (-0.058, -0.138, -0.018)
+    assert SHOVEL_COMPOUND_BOUNDS_MAX_M == (0.058, -0.043, 0.034)
     profile = _profile()
     np.testing.assert_allclose(
         profile.tool_local_grasp_frame.position,
         SHOVEL_TOOL_LOCAL_GRASP_POSITION_M,
     )
     assert SHOVEL_TOOL_LOCAL_GRASP_POSITION_M[1] == pytest.approx(0.060)
+    assert SHOVEL_TOOL_LOCAL_GRASP_POSITION_M[0] == pytest.approx(-0.035)
     np.testing.assert_allclose(
         derive_wrist_tool_transform(profile).wrist_from_tool.position,
-        (-0.045, 0.060, -0.02),
+        (-0.035, 0.060, -0.02),
     )
 
 
@@ -130,7 +170,7 @@ def test_tool_wrist_transform_round_trips_without_recalibration() -> None:
     transform = derive_wrist_tool_transform(profile)
     np.testing.assert_allclose(
         transform.wrist_from_tool.position,
-        (-0.045, 0.060, -0.02),
+        (-0.035, 0.060, -0.02),
     )
 
 
@@ -295,7 +335,7 @@ def test_scoop_lane_uses_fixed_world_x_offset_for_all_approach_phases() -> None:
     snapshot = _snapshot()
     config = ShovelPlanConfig(fps=10, phase_duration_s=0.1, max_joint_step=10.0)
     _, diagnostics = ResetTimeShovelPlanner(_FakeIK(), _profile(), config).build(snapshot)
-    assert SHOVEL_SCOOP_LANE_X_OFFSET_M == pytest.approx(0.035)
+    assert SHOVEL_SCOOP_LANE_X_OFFSET_M == pytest.approx(0.025)
     expected_x = snapshot.red_block_world.position[0] + SHOVEL_SCOOP_LANE_X_OFFSET_M
     for phase in (
         "move_above_behind_red",
@@ -323,13 +363,13 @@ def test_tray_root_compensation_restores_previous_wrist_centerline() -> None:
     _, diagnostics = ResetTimeShovelPlanner(_FakeIK(), profile, config).build(snapshot)
 
     tray_root = diagnostics.tool_targets_world["transport_loaded_to_tray"]
-    assert SHOVEL_TRAY_ROOT_X_COMPENSATION_M == pytest.approx(0.020)
+    assert SHOVEL_TRAY_ROOT_X_COMPENSATION_M == pytest.approx(0.010)
     np.testing.assert_allclose(
         tray_root.position[0],
         snapshot.tray_world.position[0] + SHOVEL_TRAY_ROOT_X_COMPENSATION_M,
     )
     # With the identity-X component of the authored tray orientation, the new
-    # (+20 mm root, -45 mm grasp) wrist X equals the old uncompensated
+    # (+10 mm root, -35 mm grasp) wrist X equals the old uncompensated
     # (-25 mm grasp) wrist centerline. This is a reset-time arithmetic
     # regression check, not a runtime correction or contact exemption.
     new_wrist_x = wrist_pose_from_tool(tray_root, profile).position[0]
@@ -362,9 +402,12 @@ def test_transformed_compound_envelope_rotates_and_translates() -> None:
         np.asarray([0.0, 0.0, np.sin(np.pi / 4.0), np.cos(np.pi / 4.0)]),
     )
     minimum, maximum = transformed_compound_tool_aabb(tool, profile)
-    assert minimum[0] < 1.0 < maximum[0]
-    assert minimum[1] < 2.0 < maximum[1]
-    assert minimum[2] < 3.0 < maximum[2]
+    # The socket/blade envelope is entirely on local -Y, so a +90-degree yaw
+    # moves its world-X interval to the positive side of the root.  Checking
+    # the resulting intervals catches stale positive-Y geometry bounds while
+    # retaining the transform contract for the new compound geometry.
+    np.testing.assert_allclose(minimum, (1.043, 1.942, 2.982), atol=1.0e-12)
+    np.testing.assert_allclose(maximum, (1.138, 2.058, 3.034), atol=1.0e-12)
     assert np.all(maximum > minimum)
 
 
@@ -394,7 +437,7 @@ def _empty_robot_exact() -> dict[str, dict[str, dict[str, bool]]]:
     return {
         phase: {
             "robot_link": {
-                "handle": False,
+                "finger_socket": False,
                 "blade": False,
                 "backstop": False,
             }
@@ -492,7 +535,7 @@ def test_exact_robot_collision_is_fatal_even_with_nonoverlapping_broad_aabb() ->
         ),
     }
     exact = _exact_robot_records(profile)
-    exact["move_above_behind_red"]["elbow_link"]["handle"] = True
+    exact["move_above_behind_red"]["elbow_link"]["finger_socket"] = True
     report = validate_shovel_swept_clearance(
         phase_tool_poses=poses,
         profile=profile,
@@ -505,6 +548,133 @@ def test_exact_robot_collision_is_fatal_even_with_nonoverlapping_broad_aabb() ->
         failure["kind"] == "exact_tool_robot_overlap"
         and failure["label"] == "elbow_link"
         for failure in report.first_failures
+    )
+
+
+def test_socket_grasp_exemption_is_hand_only_and_phase_gated() -> None:
+    profile = _profile()
+    poses = _phase_poses()
+    static = {
+        "packing_table": (
+            np.asarray([-100.0, -100.0, -100.0]),
+            np.asarray([-99.0, -99.0, -99.0]),
+        ),
+    }
+
+    # A named hand contact with the socket is the one intended grasp interface,
+    # and becomes exempt starting at the fixed descend phase.
+    hand_exact = _exact_robot_records(profile, label="left_hand_Link1_1")
+    hand_exact["descend_to_tool_grasp"]["left_hand_Link1_1"]["finger_socket"] = True
+    hand_report = validate_shovel_swept_clearance(
+        phase_tool_poses=poses,
+        profile=profile,
+        scene_aabbs=static,
+        robot_aabbs_by_phase=_robot_aabbs_with_label("left_hand_Link1_1"),
+        robot_exact_collisions_by_phase=hand_exact,
+    )
+    assert hand_report.status == "PASS"
+
+    # The same named contact before descend is not a grasp yet and must remain
+    # fatal, so a premature hand/socket overlap cannot hide a bad reset path.
+    early_hand_exact = _exact_robot_records(profile, label="left_hand_Link1_1")
+    early_hand_exact["move_to_tool_pregrasp"]["left_hand_Link1_1"]["finger_socket"] = True
+    early_hand_report = validate_shovel_swept_clearance(
+        phase_tool_poses=poses,
+        profile=profile,
+        scene_aabbs=static,
+        robot_aabbs_by_phase=_robot_aabbs_with_label("left_hand_Link1_1"),
+        robot_exact_collisions_by_phase=early_hand_exact,
+    )
+    assert early_hand_report.status == "FAIL"
+    assert any(failure["component"] == "finger_socket" for failure in early_hand_report.first_failures)
+
+    # Elbow/body geometry is never part of the grasp mask, even after descend.
+    elbow_exact = _exact_robot_records(profile, label="left_elbow_link")
+    elbow_exact["descend_to_tool_grasp"]["left_elbow_link"]["finger_socket"] = True
+    elbow_report = validate_shovel_swept_clearance(
+        phase_tool_poses=poses,
+        profile=profile,
+        scene_aabbs=static,
+        robot_aabbs_by_phase=_robot_aabbs_with_label("left_elbow_link"),
+        robot_exact_collisions_by_phase=elbow_exact,
+    )
+    assert elbow_report.status == "FAIL"
+    assert any(failure["label"] == "left_elbow_link" for failure in elbow_report.first_failures)
+
+
+def test_socket_grasp_exemption_never_applies_to_static_scene_labels() -> None:
+    profile = _profile()
+    poses = _phase_poses()
+    descend_x = float(SHOVEL_PHASES.index("descend_to_tool_grasp"))
+    # Deliberately use a misleading static-object label containing ``wrist``.
+    # A scene object is never a robot link, so overlap with the socket must fail
+    # even after the fixed grasp-contact phase begins.
+    static = {
+        "wrist_fixture": (
+            np.asarray([descend_x - 0.1, 1.9, 2.9]),
+            np.asarray([descend_x + 0.1, 2.1, 3.1]),
+        ),
+    }
+    report = validate_shovel_swept_clearance(
+        phase_tool_poses=poses,
+        profile=profile,
+        scene_aabbs=static,
+        robot_aabbs_by_phase=_empty_robot_aabbs(),
+        robot_exact_collisions_by_phase=_empty_robot_exact(),
+    )
+    assert report.status == "FAIL"
+    assert any(
+        failure["kind"] == "compound_tool_overlap"
+        and failure["label"] == "wrist_fixture"
+        and failure["component"] == "finger_socket"
+        for failure in report.first_failures
+    )
+
+
+def test_socket_table_contact_uses_only_the_existing_phase_support_map() -> None:
+    profile = _profile()
+    poses = _phase_poses()
+    exact = _empty_robot_exact()
+    broad = _empty_robot_aabbs()
+
+    # At reset/open phase the pre-existing table support map explicitly allows
+    # the complete resting compound, including the socket rails.
+    open_static = {
+        "packing_table": (
+            np.asarray([-0.1, 1.9, 2.9]),
+            np.asarray([0.1, 2.1, 3.1]),
+        ),
+    }
+    open_report = validate_shovel_swept_clearance(
+        phase_tool_poses=poses,
+        profile=profile,
+        scene_aabbs=open_static,
+        robot_aabbs_by_phase=broad,
+        robot_exact_collisions_by_phase=exact,
+    )
+    assert open_report.status == "PASS"
+
+    # At insert phase, only blade/backstop table contact is in the frozen map;
+    # a socket/table overlap must therefore fail even though the table is an
+    # intended contact label for the overall phase.
+    insert_x = float(SHOVEL_PHASES.index("insert_blade"))
+    insert_static = {
+        "packing_table": (
+            np.asarray([insert_x - 0.1, 1.9, 2.9]),
+            np.asarray([insert_x + 0.1, 2.1, 3.1]),
+        ),
+    }
+    insert_report = validate_shovel_swept_clearance(
+        phase_tool_poses=poses,
+        profile=profile,
+        scene_aabbs=insert_static,
+        robot_aabbs_by_phase=broad,
+        robot_exact_collisions_by_phase=exact,
+    )
+    assert insert_report.status == "FAIL"
+    assert any(
+        failure["label"] == "packing_table" and failure["component"] == "finger_socket"
+        for failure in insert_report.first_failures
     )
 
 

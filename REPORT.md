@@ -76,6 +76,15 @@ shovel had dropped/remained on the left table before the hand moved behind the
 red block. It is physical PARTIAL evidence only; its artifacts are not a
 completed valid Task 4 recording, and no push/drop is reported as a scoop.
 
+A Task-4-only drive experiment then doubled the live left-finger
+stiffness/damping from the public `800.0/3.0` gains to `1600.0/6.0`, while the
+right hand and all other actuator/material fields stayed unchanged. Visible
+Gate22 verified those exact PhysX values and again passed all 22 IK waypoints
+and 345,138 swept checks before step zero. The gated rollout-06 still left the
+shovel on the table by `move_above_behind_red`, so it was stopped and Task 4
+remains PARTIAL. This isolates the remaining problem to grasp/contact geometry
+rather than the configured drive gain alone.
+
 ## Reproduction and boundaries
 
 Use only the visible command sequence in the runbook with the public

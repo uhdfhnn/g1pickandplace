@@ -23,13 +23,14 @@ def Xform "ShovelTool" (
     point3f physics:centerOfMass = (0.0, -0.090, -0.010)
     bool physics:rigidBodyEnabled = true
 
-    # The rectangular handle alone receives dimensionless static/dynamic
-    # friction 20/15 with max-combine and zero restitution.  These deliberately
-    # large values implement the requested high-grip handle and exceed the
-    # public block's already validated 10/1.5 surface.  Lower values can repeat
-    # the rollout-01 slip; still larger values can amplify finger impulses.
-    # Binding this material only to the handle prevents the blade from sticking
-    # to the table.  It is a fixed asset property, never a feedback gain.
+    # The five socket rails alone receive dimensionless static/dynamic friction
+    # 20/15 with max-combine and zero restitution.  These deliberately large
+    # values preserve the existing high-grip hand-contact calibration and exceed
+    # the public block's already validated 10/1.5 surface. Lower values can
+    # repeat the rollout-01 slip; still larger values can amplify finger
+    # impulses. Binding this material only to the socket rails prevents the
+    # blade from sticking to the table. It is a fixed asset property, never a
+    # feedback gain.
     def Material "GripPhysicsMaterial" (
         prepend apiSchemas = ["PhysicsMaterialAPI", "PhysxMaterialAPI"]
     )
@@ -42,41 +43,91 @@ def Xform "ShovelTool" (
 
     def Scope "Geometry"
     {
-        # The root is one dynamic body. These three child colliders are fixed
+        # The root is one dynamic body. The five socket rails below are fixed
         # by hierarchy and never become independent simulator rigid bodies.
-        # The requested handle is a 35x150x45 mm rectangular prism: local X is
-        # the Dex1 left/right closing axis, local Y is its long axis toward the
-        # rear/robot, and local Z is up. The X width remains 35 mm and the Y
-        # length remains the Gate-11 150 mm physical-clearance calibration; the
-        # prior 160 mm handle overlapped the public torso AABB by 2.97 mm along
-        # world Y. Gate20 rejected the preceding 50 mm candidate: its upper
-        # envelope produced 66 exact left-elbow overlaps during tilt_blade_up.
-        # The 45 mm candidate lowers that upper envelope by 5 mm while retaining
-        # the fixed bottom and the rollout-04 estimated finger-center gap of
-        # about 5.3 mm. The old flat handle top was root-local +0.0175 m; the
-        # new half-height is 22.5 mm and the root-local +5 mm translation makes
-        # its bottom +0.005-0.0225 = -0.0175 m (unchanged) and its top
-        # +0.005+0.0225 = +0.0275 m, raising the top exactly 10 mm.
-        # ``xformOpOrder`` lists translate before scale, so +5 mm is an explicit
-        # root-local metre offset rather than a scaled size. Keeping the bottom
-        # fixed preserves the existing blade/table height; a lower handle can
-        # remain below the finger centers and fail to grasp, while a taller one
-        # can repeat the exact elbow collision or enter the table/fingers. The
-        # fixed X/Y dimensions, high-grip material, and child hierarchy remain
-        # unchanged. This provisional geometry must pass visible reset/viewport,
-        # all-waypoint Gate C swept-clearance, and physical grasp validation.
-        def Cube "handle" (
-            prepend apiSchemas = ["PhysicsCollisionAPI"]
-        )
+        # Tool-local +X is lateral/closing, -Y points toward the blade/front,
+        # and +Z is up. The dual-finger socket occupies the rear/top of the
+        # 90 mm blade with outer bounds X=[-55,+55] mm, Y=[-120,-60] mm, and
+        # Z=[-9,+31] mm. Its two 42x44 mm openings are genuine empty cavities:
+        # only the outer rails, central rib, and front/rear rails have collision
+        # APIs, so no solid AABB is authored in either slot. The rail dimensions
+        # and positions are fixed to the measured finger path and require
+        # visible reset/viewport, Gate C swept-clearance, and physical grasp
+        # validation after any asset change.
+        def Xform "dual_finger_socket"
         {
-            float size = 1
-            float3 xformOp:translate = (0.0, 0.0, 0.005)
-            float3 xformOp:scale = (0.0175, 0.075, 0.0225)
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
-            rel material:binding:physics = </ShovelTool/GripPhysicsMaterial> (
-                bindMaterialAs = "strongerThanDescendants"
+            # Each rail is 40 mm tall and centered at local +11 mm Z. The
+            # restrained dark finish distinguishes the socket from the metal
+            # blade without adding a visual target or changing collision.
+            def Cube "left_outer_rail" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
             )
-            color3f[] primvars:displayColor = [(0.24, 0.10, 0.035)]
+            {
+                float size = 1
+                float3 xformOp:translate = (-0.051, -0.090, 0.011)
+                float3 xformOp:scale = (0.004, 0.030, 0.020)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                rel material:binding:physics = </ShovelTool/GripPhysicsMaterial> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                color3f[] primvars:displayColor = [(0.28, 0.31, 0.35)]
+            }
+
+            def Cube "right_outer_rail" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                float size = 1
+                float3 xformOp:translate = (0.051, -0.090, 0.011)
+                float3 xformOp:scale = (0.004, 0.030, 0.020)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                rel material:binding:physics = </ShovelTool/GripPhysicsMaterial> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                color3f[] primvars:displayColor = [(0.28, 0.31, 0.35)]
+            }
+
+            def Cube "central_rib" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                float size = 1
+                float3 xformOp:translate = (0.0, -0.090, 0.011)
+                float3 xformOp:scale = (0.005, 0.030, 0.020)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                rel material:binding:physics = </ShovelTool/GripPhysicsMaterial> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                color3f[] primvars:displayColor = [(0.28, 0.31, 0.35)]
+            }
+
+            def Cube "front_rail" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                float size = 1
+                float3 xformOp:translate = (0.0, -0.116, 0.011)
+                float3 xformOp:scale = (0.051, 0.004, 0.020)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                rel material:binding:physics = </ShovelTool/GripPhysicsMaterial> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                color3f[] primvars:displayColor = [(0.28, 0.31, 0.35)]
+            }
+
+            def Cube "rear_rail" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                float size = 1
+                float3 xformOp:translate = (0.0, -0.064, 0.011)
+                float3 xformOp:scale = (0.051, 0.004, 0.020)
+                uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+                rel material:binding:physics = </ShovelTool/GripPhysicsMaterial> (
+                    bindMaterialAs = "strongerThanDescendants"
+                )
+                color3f[] primvars:displayColor = [(0.28, 0.31, 0.35)]
+            }
         }
 
         # This convex mesh is a genuine 75 mm long by 90 mm wide wedge rather

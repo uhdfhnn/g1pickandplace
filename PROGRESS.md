@@ -889,3 +889,37 @@ attachment, teleport, kinematic object write, or private project code/assets
 were used. Final dependency-light validation at this checkpoint is 154 tests
 passed; compileall and `git diff --check` passed, and no simulator process
 remained.
+
+## 2026-09-06 — Task 4 left-gripper drive-only experiment
+
+The shovel handle already uses deliberately high static/dynamic friction
+(`20.0/15.0`), so this experiment changed no material, geometry, trajectory,
+effort limit, velocity limit, joint friction, or armature. Only the resolved
+Task 4 configuration doubles the two left Dex1 finger drives from the public
+`800.0 N*m/rad` stiffness and `3.0 N*m*s/rad` damping to `1600.0` and `6.0`.
+The two right-hand joints remain at `800.0/3.0`; Tasks 1-3 never enter this
+configuration branch. A new fail-closed runtime gate reads the live Isaac Lab
+joint stiffness/damping tensors rather than trusting the configuration object.
+
+- The visible inspect in `outputs/task4_drive2x_gate_22/` reports live left
+  gains `1600.0/6.0`, live right gains `800.0/3.0`, and status `PASS`.
+- The following visible plan solved all 22 reset-time IK waypoints and passed
+  all 345,138 swept checks with zero failures. It froze 2,501 actions with
+  SHA-256 `644d3ed63409da174a94bbeb14f8fda6528be6f0e79a6cce3d3c8cba74b9b253`
+  and explicitly exited before rollout step zero.
+- A separately gated visible physical attempt is under
+  `outputs/task4_drive2x_rollout_06/`. Its inspect and plan stages passed before
+  execution. At the `lift_tool` boundary the handle was still adjacent to the
+  left gripper, but by `move_above_behind_red` the handle was visibly resting
+  on the left side of the table while the hand continued toward the red block;
+  `move_behind_red` confirmed the separation. The attempt was intentionally
+  stopped, so it is neither a completed recording nor a Task 4 semantic PASS.
+
+This isolated 2x drive increase therefore did **not** fix the held-tool
+failure. Task 4 remains **PARTIAL**. The result points to grasp geometry/contact
+placement rather than insufficient configured drive gain alone; raising the
+gain further without changing that geometry is not supported by this evidence
+and risks larger contact impulses or solver instability. The strict open-loop
+boundary remained unchanged, all simulator runs were visible, and no simulator
+process remained afterward. Final dependency-light validation is 168 tests
+passed; compileall and `git diff --check` passed.

@@ -1,5 +1,10 @@
 # Unitree G1 pick-and-place entrance demo
 
+## 📦 Project Artifacts
+
+> [!IMPORTANT]
+> **Our complete project artifacts are available on [Google Drive →](https://drive.google.com/drive/folders/1ymrNqLwD-4VxWCrw5eiCdH7-AAMfuNw-?usp=drive_link).**
+
 This repository implements a reset-time, open-loop IK baseline for the public
 Unitree G1 29-DoF Dex1 environment. The approved scene is
 Isaac-Stack-RgyBlock-G129-Dex1-Joint: public warehouse, packing table, yellow
