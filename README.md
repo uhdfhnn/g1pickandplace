@@ -115,6 +115,40 @@ joint command. The wrapper defaults to 16 seconds, producing 160 actions at the
 model's 10 Hz rate (`num_frames=161`). The result is validated and saved
 together with the initial G1 state, but never passed to `env.step`.
 
+## Cosmos action replay and video
+
+Replay a saved inference artifact in the same visible Unitree scene and record
+the front/left-wrist/right-wrist concat view:
+
+~~~bash
+cd g1pickandplace
+python3 scripts/replay_cosmos_action.py \
+  --action outputs/cosmos_stack_red_on_yellow_16s \
+  --instruction "Pick up the red block and stack it on the yellow block." \
+  --output-dir outputs/cosmos_stack_red_on_yellow_16s_replay
+~~~
+
+`--action` accepts an inference directory containing
+`sim_inference_context.npz`, a compatible NPZ, or the saved action JSON. The
+29-D normalized AgiBotWorld action is quantile-denormalized and interpreted as
+relative wrist poses plus gripper-open fractions (`0=closed`, `1=open`). Only
+the hand selected by the resolved task profile is mapped to G1. Every 10 Hz
+wrist pose is solved through the public G1 URDF before rollout; the resulting
+joint targets are interpolated to 50 Hz and checked for joint limits, maximum
+step size, IK residual, and URDF self-collision. Any failed preflight stops
+before action zero.
+
+The output directory contains:
+
+- `cosmos_replay.mp4`: 640x720 three-camera video at 10 fps;
+- `cosmos_replay_trajectory.npz`: frozen 50 Hz G1 joint trajectory;
+- `replay.log`: preflight, playback, and final physical evaluation evidence.
+
+For a 160-row action artifact, replay produces 800 simulator commands and a
+160-frame, 16-second video. A completed replay does not imply task success: the
+final simulator evaluator remains authoritative and may report `success=false`
+when the predicted motion does not grasp or place the object.
+
 ## Repository map
 
 ~~~text
@@ -127,6 +161,7 @@ src/g1pickplace/lerobot_writer.py native LeRobot episode writer
 scripts/run_unitree_mvp.py        public Unitree integration and visible gates
 scripts/run_demo.py               single visible inspect/plan/rollout entry
 scripts/run_cosmos_inference.py   visible first-frame Cosmos dry-run entry
+scripts/replay_cosmos_action.py   validated G1 replay and MP4 wrapper
 scripts/preview_plan.py           simulator-free planner smoke test
 src/g1pickplace/cosmos_inference.py concat preprocessing and async Cosmos client
 tests/                            dependency-light correctness tests

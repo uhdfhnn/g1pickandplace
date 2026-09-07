@@ -3220,6 +3220,27 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--cosmos-replay-action",
+    type=Path,
+    default=None,
+    help=(
+        "saved Cosmos inference directory, NPZ, or JSON to decode through G1 IK "
+        "and replay only after the complete trajectory passes preflight"
+    ),
+)
+parser.add_argument(
+    "--cosmos-replay-video",
+    type=Path,
+    default=None,
+    help="MP4 path for the 10-Hz front/left-wrist/right-wrist replay view",
+)
+parser.add_argument(
+    "--cosmos-replay-stats",
+    type=Path,
+    default=None,
+    help="optional explicitly versioned q01/q99 JSON; defaults to the bundled AgiBotWorld stats",
+)
+parser.add_argument(
     "--inspect-only",
     action="store_true",
     help="reset and inspect the public scene without constructing or running the expert",
@@ -3361,6 +3382,16 @@ if args.cosmos_policy_output_dir is not None and not args.inspect_only:
     parser.error("--cosmos-policy-output-dir is inference-only and requires --inspect-only")
 if args.cosmos_policy_output_dir is not None and args.no_video:
     parser.error("--cosmos-policy-output-dir requires RGB cameras and conflicts with --no-video")
+if args.cosmos_replay_action is not None and args.inspect_only:
+    parser.error("--cosmos-replay-action executes a validated trajectory and conflicts with --inspect-only")
+if args.cosmos_replay_action is not None and args.plan_only:
+    parser.error("--cosmos-replay-action is a replay request and conflicts with --plan-only")
+if args.cosmos_replay_action is not None and args.cosmos_replay_video is None:
+    parser.error("--cosmos-replay-action requires --cosmos-replay-video")
+if args.cosmos_replay_video is not None and args.cosmos_replay_action is None:
+    parser.error("--cosmos-replay-video requires --cosmos-replay-action")
+if args.cosmos_replay_action is not None and args.no_video:
+    parser.error("Cosmos replay video requires RGB cameras and conflicts with --no-video")
 if not args.inspect_only and args.urdf is None and not (
     args.demo_spec is not None and args.demo_spec.demo_task == "shovel"
 ):
@@ -3406,6 +3437,7 @@ if (
     args.record_root is not None
     or args.phase_boundary_frame_root is not None
     or args.cosmos_policy_output_dir is not None
+    or args.cosmos_replay_video is not None
 ) and not args.no_video:
     args.enable_cameras = True
 
@@ -6264,6 +6296,7 @@ def _register_selected_public_g1_task(task_id: str) -> None:
 def main() -> int:
     env = None
     recorder = None
+    cosmos_video_writer = None
     shovel_snapshot = None
     shovel_profile = None
     try:
@@ -6639,11 +6672,51 @@ def main() -> int:
                 transport_duration_s=args.segment_durations_s["transport_duration_s"],
                 return_duration_s=args.segment_durations_s["return_duration_s"],
             )
-            print(
-                "[plan] solving reset-time IK waypoints (optional staging plus five required waypoints)",
-                flush=True,
-            )
-            if typed_snapshot is not None:
+            if args.cosmos_replay_action is not None:
+                print(
+                    "[cosmos-replay] solving every 10-Hz wrist target before rollout",
+                    flush=True,
+                )
+                from g1pickplace.cosmos_replay import (
+                    DEFAULT_STATS_PATH,
+                    compile_cosmos_replay_trajectory,
+                    load_cosmos_action,
+                    load_quantile_stats,
+                )
+
+                selected_side = "left" if args.ee_frame.startswith("left_") else "right"
+                selected_gripper_names = (
+                    DEX1_LEFT_GRIPPER_JOINT_NAMES
+                    if selected_side == "left"
+                    else DEX1_RIGHT_GRIPPER_JOINT_NAMES
+                )
+                initial_wrist_base = _root_pose(env, "robot").inverse().compose(
+                    _body_pose(env, args.ee_frame)
+                )
+                cosmos_action = load_cosmos_action(args.cosmos_replay_action)
+                trajectory, cosmos_replay_report = compile_cosmos_replay_trajectory(
+                    normalized_action=cosmos_action,
+                    stats=load_quantile_stats(
+                        args.cosmos_replay_stats or DEFAULT_STATS_PATH
+                    ),
+                    side=selected_side,
+                    initial_wrist_base=initial_wrist_base,
+                    ik=ik,
+                    action_names=action_names,
+                    current_joint_positions=current,
+                    default_joint_positions=defaults,
+                    action_limits=action_limits,
+                    gripper_joint_names=selected_gripper_names,
+                    gripper_open_positions=args.gripper_open,
+                    gripper_closed_positions=args.gripper_closed,
+                    sim_fps=args.fps,
+                )
+                diagnostics = None
+            elif typed_snapshot is not None:
+                print(
+                    "[plan] solving reset-time IK waypoints (optional staging plus five required waypoints)",
+                    flush=True,
+                )
                 # This helper returns one immutable trajectory only after every
                 # selected object's complete waypoint program has been solved.
                 trajectory, diagnostics = _build_typed_sort_trajectory(
@@ -6652,6 +6725,10 @@ def main() -> int:
                     plan_config,
                 )
             elif args.demo_spec is not None and args.demo_spec.demo_task == "shovel":
+                print(
+                    "[plan] solving reset-time IK waypoints (optional staging plus five required waypoints)",
+                    flush=True,
+                )
                 if shovel_snapshot is None or shovel_profile is None:
                     raise RuntimeError("shovel reset snapshot/profile was not constructed")
                 shovel_durations = {
@@ -6704,6 +6781,10 @@ def main() -> int:
                     shovel_plan_config,
                 ).build(shovel_snapshot)
             else:
+                print(
+                    "[plan] solving reset-time IK waypoints (optional staging plus five required waypoints)",
+                    flush=True,
+                )
                 trajectory, diagnostics = ResetTimePickPlacePlanner(ik, plan_config).build(snapshot)
             controlled_gripper_names = (
                 shovel_profile_gripper_joint_names
@@ -6720,7 +6801,13 @@ def main() -> int:
                 trajectory,
                 initial_absolute_positions=current,
             )
-            if args.demo_spec is not None and args.demo_spec.demo_task == "shovel":
+            if args.cosmos_replay_action is not None:
+                print(
+                    "[cosmos-replay-preflight] "
+                    + json.dumps(cosmos_replay_report, sort_keys=True),
+                    flush=True,
+                )
+            elif args.demo_spec is not None and args.demo_spec.demo_task == "shovel":
                 if shovel_snapshot is None or shovel_profile is None:
                     raise RuntimeError("shovel preflight lacks immutable reset/profile state")
                 scene_aabbs = _shovel_scene_aabbs(env, demo_snapshot, shovel_snapshot)
@@ -6847,6 +6934,36 @@ def main() -> int:
         policy = OpenLoopPolicy(trajectory)
 
         initial_images = _camera_images(env)
+        cosmos_video_stride = None
+        if args.cosmos_replay_video is not None:
+            from g1pickplace.cosmos_replay import (
+                COSMOS_ACTION_FPS,
+                CosmosReplayVideoWriter,
+            )
+
+            # One RGB frame is written after every five 50-Hz commands, giving
+            # exactly one video frame per 10-Hz Cosmos transition.  The stride
+            # is dimensionless and derived from the two explicit rates rather
+            # than guessed.  A non-integral ratio would cause duration drift,
+            # so it is rejected; changing either rate remains configurable but
+            # must preserve this exact divisibility for faithful replay timing.
+            if args.fps % COSMOS_ACTION_FPS != 0:
+                raise RuntimeError(
+                    f"replay fps {args.fps} is not divisible by Cosmos fps {COSMOS_ACTION_FPS}"
+                )
+            cosmos_video_stride = args.fps // COSMOS_ACTION_FPS
+            cosmos_video_writer = CosmosReplayVideoWriter(
+                args.cosmos_replay_video,
+                fps=COSMOS_ACTION_FPS,
+            )
+            # Fail before command zero when a required stream is absent or has
+            # an incompatible shape.  The initial frame is intentionally not
+            # encoded: frame 0 is sampled after the first complete 0.1-second
+            # Cosmos transition, so T action rows produce exactly T frames and
+            # a T/10-second MP4 rather than an off-by-one longer video.
+            from g1pickplace.cosmos_inference import make_unitree_concat_view
+
+            make_unitree_concat_view(initial_images)
         if args.record_root is not None:
             recorder = LeRobotEpisodeWriter(
                 root=args.record_root,
@@ -6924,6 +7041,12 @@ def main() -> int:
             observation, _, terminated, truncated, _ = env.step(
                 torch.as_tensor(action, dtype=torch.float32, device=env.device).unsqueeze(0)
             )
+            if (
+                cosmos_video_writer is not None
+                and cosmos_video_stride is not None
+                and policy.step % cosmos_video_stride == 0
+            ):
+                cosmos_video_writer.add(_camera_images(env))
             terminated_now = bool(torch.as_tensor(terminated).any())
             truncated_now = bool(torch.as_tensor(truncated).any())
             if terminated_now or truncated_now:
@@ -6962,6 +7085,20 @@ def main() -> int:
                         "red_speed_mps": shovel_sample["red_speed_mps"],
                     }
                 )
+
+        if cosmos_video_writer is not None:
+            cosmos_video_writer.close()
+            replay_video_report = {
+                "path": str(args.cosmos_replay_video.expanduser().resolve()),
+                "frames": cosmos_video_writer.frames,
+                "fps": COSMOS_ACTION_FPS,
+                "duration_s": cosmos_video_writer.frames / COSMOS_ACTION_FPS,
+            }
+            print(
+                "[cosmos-replay-video] "
+                + json.dumps(replay_video_report, sort_keys=True),
+                flush=True,
+            )
 
         if recorder is not None:
             recorder.save_episode()
@@ -7296,6 +7433,13 @@ def main() -> int:
             result_payload["success"] = False
             result_payload["rollout_end_flags"] = rollout_end_flags
         print("[result] " + json.dumps(result_payload, sort_keys=True))
+        if args.cosmos_replay_action is not None:
+            # Replay completion and manipulation success are distinct: the
+            # requested artifact is valid once every frozen action was consumed
+            # and the video closed, even when the policy did not stack the
+            # blocks.  The printed result retains the physical success=false
+            # evidence instead of disguising it as a successful manipulation.
+            return 0
         return 0 if result_payload["success"] else 2
     except Exception as exc:
         print(f"[error] {type(exc).__name__}: {exc}", flush=True)
@@ -7306,6 +7450,8 @@ def main() -> int:
         traceback.print_exc()
         raise
     finally:
+        if cosmos_video_writer is not None:
+            cosmos_video_writer.close()
         if recorder is not None:
             recorder.finalize()
         if env is not None:
