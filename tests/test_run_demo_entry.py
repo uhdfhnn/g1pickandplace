@@ -61,6 +61,45 @@ def test_instruction_is_mandatory() -> None:
         wrapper._parser().parse_args([])
 
 
+def test_keyboard_teleop_is_an_alternative_to_instruction() -> None:
+    wrapper = _load_wrapper()
+    arguments = wrapper._parser().parse_args(["--keyboard-teleop"])
+    assert arguments.keyboard_teleop
+    assert arguments.instruction is None
+
+
+def test_keyboard_teleop_runs_one_visible_non_recording_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wrapper = _load_wrapper()
+    calls: list[list[str]] = []
+
+    def fake_popen(command: list[str], **kwargs: object) -> _FakeProcess:
+        calls.append(command)
+        return _FakeProcess(
+            0,
+            '[teleop] complete: {"mode": "manual_joint_jog", "status": "PASS"}\n',
+        )
+
+    monkeypatch.setattr(wrapper.subprocess, "Popen", fake_popen)
+    output_dir = tmp_path / "keyboard"
+    assert wrapper.main(["--keyboard-teleop", "--output-dir", str(output_dir)]) == 0
+    assert len(calls) == 1
+    assert "--keyboard-teleop" in calls[0]
+    assert "--instruction" not in calls[0]
+    assert "--inspect-only" not in calls[0]
+    assert "--plan-only" not in calls[0]
+    assert "--record-root" not in calls[0]
+    assert "--headless" not in calls[0]
+    assert (output_dir / "teleop.log").is_file()
+
+
+def test_keyboard_teleop_rejects_rollout() -> None:
+    wrapper = _load_wrapper()
+    with pytest.raises(SystemExit):
+        wrapper.main(["--keyboard-teleop", "--rollout"])
+
+
 def test_default_gates_order_instruction_and_recording_flags(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

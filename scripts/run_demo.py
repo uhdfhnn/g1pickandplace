@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Visible three-gate entry point for the approved public Unitree demo.
+"""Visible entry point for autonomous gates and manual keyboard teleoperation.
 
 The wrapper deliberately delegates all simulation behavior to
 scripts/run_unitree_mvp.py. It owns only subprocess ordering, paths, logging,
@@ -106,12 +106,17 @@ RESET_SEED_VALUE = "0"
 SHOVEL_RESET_SETTLE_STEPS = "150"
 SETTLE_STEPS_FLAG = "--settle-steps"
 
-# Stage labels are used for log names and ordering only. The fixed sequence is
-# the design gate: inspect must succeed before plan, and plan must succeed
-# before an explicitly requested physical rollout.
+# Stage labels are used for log filenames and dispatch only; they have no units
+# and never enter robot control.  The inspect/plan/rollout strings preserve the
+# accepted artifact contract.  ``teleop`` names the one new, separate manual
+# log and was selected to match the CLI term operators see.  Renaming any value
+# would break log consumers; adding teleop to the autonomous sequence would
+# incorrectly mix manual actions with acceptance evidence.  These labels are
+# intentionally fixed rather than configurable.
 INSPECT_STAGE = "inspect"
 PLAN_STAGE = "plan"
 ROLLOUT_STAGE = "rollout"
+TELEOP_STAGE = "teleop"
 
 # This is a wrapper-level semantic-gate exit status (an integer process exit
 # code, not a distance or time).  It is deliberately distinct from the child
@@ -135,6 +140,7 @@ _RECORD_VALIDATION_MARKER = "[record-validation]"
 _RESULT_MARKER = "[result]"
 _INSPECT_COMPLETE_MARKER = "[inspect] complete: expert and trajectory were not constructed"
 _PLAN_COMPLETE_MARKER = "[plan] complete: rollout step zero was not started"
+_TELEOP_COMPLETE_MARKER = "[teleop] complete:"
 
 
 def _default_output_dir() -> Path:
@@ -148,11 +154,21 @@ def _default_output_dir() -> Path:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run visible inspect, plan, and optional rollout gates for the public G1 demo."
+        description=(
+            "Run visible autonomous gates or the separate manual keyboard joint-jog "
+            "demo for the public G1 scene."
+        )
     )
-    # Instruction is mandatory because the wrapper must never silently choose a
-    # task. The exact string is forwarded unchanged to each delegated gate.
-    parser.add_argument("--instruction", required=True)
+    # Exactly one mode is mandatory: an autonomous request must name its
+    # instruction, while manual teleop has no implicit task-success objective.
+    # The instruction string is forwarded unchanged to each autonomous gate.
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--instruction")
+    mode.add_argument(
+        "--keyboard-teleop",
+        action="store_true",
+        help="launch manual dual-arm joint jog; no autonomous rollout or recording",
+    )
     # Rollout is opt-in so the safe default performs only visible inspect and
     # plan. This flag is a gate request, not a feedback or recovery mechanism.
     parser.add_argument("--rollout", action="store_true")
@@ -267,8 +283,6 @@ def _common_command(arguments: argparse.Namespace) -> list[str]:
         str(arguments.package_dir),
         "--task",
         PUBLIC_STACK_TASK_ID,
-        "--instruction",
-        arguments.instruction,
         "--device",
         arguments.device,
         CAMERA_FLAG,
@@ -276,12 +290,14 @@ def _common_command(arguments: argparse.Namespace) -> list[str]:
         RESET_SEED_FLAG,
         RESET_SEED_VALUE,
     ]
+    if arguments.instruction is not None:
+        command.extend(("--instruction", arguments.instruction))
     # The public instruction resolver accepts block/brick wording and
     # punctuation variants, all of which retain the distinctive tool noun.
     # This branch only selects a reset-time scene-settling preset; it does not
     # select actions or inspect observations.  The runner remains authoritative
     # for validating that the instruction resolves to the shovel task.
-    if "shovel" in arguments.instruction.casefold():
+    if arguments.instruction is not None and "shovel" in arguments.instruction.casefold():
         command.extend((SETTLE_STEPS_FLAG, SHOVEL_RESET_SETTLE_STEPS))
     return command
 
@@ -331,6 +347,8 @@ def _stage_command(arguments: argparse.Namespace, stage: str, output_dir: Path) 
                 str(output_dir / "rollout.npz"),
             ]
         )
+    elif stage == TELEOP_STAGE:
+        command.append("--keyboard-teleop")
     else:
         raise ValueError(f"unsupported gate stage: {stage}")
     return command
@@ -513,6 +531,14 @@ def _validate_stage_log(stage: str, output_dir: Path) -> tuple[bool, str]:
             return False, result_reason
         return True, "ok"
 
+    if stage == TELEOP_STAGE:
+        return _require_json_marker(
+            log_text,
+            _TELEOP_COMPLETE_MARKER,
+            field="status",
+            expected="PASS",
+        )
+
     raise ValueError(f"unsupported gate stage: {stage}")
 
 
@@ -539,10 +565,23 @@ def _run_and_validate_stage(
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
+    if arguments.keyboard_teleop and arguments.rollout:
+        _parser().error("--keyboard-teleop conflicts with --rollout")
     output_dir = _resolved_output_dir(arguments.output_dir)
     output_dir.mkdir(parents=True, exist_ok=False)
     environment = _runtime_environment(arguments)
     print(f"[wrapper] output_dir={output_dir}", flush=True)
+
+    if arguments.keyboard_teleop:
+        print(f"[wrapper] {TELEOP_STAGE} start", flush=True)
+        status = _run_and_validate_stage(
+            TELEOP_STAGE,
+            _stage_command(arguments, TELEOP_STAGE, output_dir),
+            environment,
+            output_dir,
+        )
+        print(f"[wrapper] {TELEOP_STAGE} result={status}", flush=True)
+        return status
 
     # This explicit sequence is the fail-closed boundary. A nonzero inspect
     # status prevents plan and rollout; a nonzero plan status prevents rollout.

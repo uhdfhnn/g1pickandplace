@@ -3250,6 +3250,14 @@ parser.add_argument(
     action="store_true",
     help="solve and save every reset-time IK waypoint, then exit before rollout step zero",
 )
+parser.add_argument(
+    "--keyboard-teleop",
+    action="store_true",
+    help=(
+        "run the separate visible joint-jog demo; this bypasses trajectory planning, "
+        "OpenLoopPolicy, evaluation, and recording"
+    ),
+)
 
 # AppLauncher is imported only after PROJECT_ROOT/sys.path are prepared below.
 known, _ = parser.parse_known_args()
@@ -3276,6 +3284,8 @@ demo_cli_requested = any(
         args.clearance_m,
     )
 )
+if args.keyboard_teleop and demo_cli_requested:
+    parser.error("--keyboard-teleop does not accept autonomous demo-task or instruction options")
 if args.validated_fixed_seed_preset and (
     args.minimal_demo_preset
     or args.minimal_demo_scene
@@ -3376,6 +3386,19 @@ else:
         args.task_text = "Pick up the red block and place it in the green target area."
 if args.inspect_only and args.plan_only:
     parser.error("--inspect-only and --plan-only are mutually exclusive")
+if args.keyboard_teleop and (args.inspect_only or args.plan_only):
+    parser.error("--keyboard-teleop conflicts with --inspect-only and --plan-only")
+if args.keyboard_teleop and any(
+    value is not None
+    for value in (
+        args.record_root,
+        args.phase_boundary_frame_root,
+        args.cosmos_policy_output_dir,
+        args.cosmos_replay_action,
+        args.cosmos_replay_video,
+    )
+):
+    parser.error("--keyboard-teleop does not record or run Cosmos inference/replay")
 if args.viewport_frame is not None and not args.inspect_only:
     parser.error("--viewport-frame is diagnostic-only and requires --inspect-only")
 if args.cosmos_policy_output_dir is not None and not args.inspect_only:
@@ -3463,6 +3486,7 @@ from g1pickplace import (
     ResetTimePickPlacePlanner,
 )  # noqa: E402
 from g1pickplace.evaluation import evaluate_pick_place  # noqa: E402
+from g1pickplace.keyboard_teleop import JointJogTeleop  # noqa: E402
 
 
 def _apply_exact_object_reset(env_cfg: Any, offsets: tuple[float, float, float]) -> None:
@@ -5220,6 +5244,89 @@ def _ordered_joint_limits(env: Any, joint_names: tuple[str, ...]) -> np.ndarray:
     return np.asarray([by_name[name] for name in joint_names], dtype=np.float64)
 
 
+def _run_keyboard_teleop(
+    env: Any,
+    action_names: tuple[str, ...],
+    current: np.ndarray,
+    defaults: np.ndarray,
+) -> dict[str, Any]:
+    """Hold a manual, limit-clamped joint target until Q/Escape or GUI close."""
+
+    # Imported after SimulationApp startup because Carb and Omni interfaces are
+    # Kit-owned.  This mode is intentionally separate from the autonomous
+    # expert: it performs no IK, creates no OpenLoopPolicy, and claims no task
+    # acceptance result.
+    import carb
+    import omni.appwindow
+
+    controller = JointJogTeleop(
+        joint_names=action_names,
+        initial_positions=current,
+        joint_limits=_ordered_joint_limits(env, action_names),
+        arm_joints_by_side={
+            "left": DEX1_LEFT_ACTIVE_JOINT_NAMES,
+            "right": DEX1_RIGHT_ACTIVE_JOINT_NAMES,
+        },
+        gripper_joints_by_side={
+            "left": DEX1_LEFT_GRIPPER_JOINT_NAMES,
+            "right": DEX1_RIGHT_GRIPPER_JOINT_NAMES,
+        },
+        gripper_open_positions=DEX1_GRIPPER_OPEN_POSITIONS,
+        gripper_closed_positions=DEX1_GRIPPER_CLOSED_POSITIONS,
+    )
+    app_window = omni.appwindow.get_default_app_window()
+    if app_window is None:
+        raise RuntimeError("keyboard teleop requires a visible Omniverse app window")
+    input_interface = carb.input.acquire_input_interface()
+    keyboard = app_window.get_keyboard()
+    if keyboard is None:
+        raise RuntimeError("visible Omniverse app window has no keyboard device")
+
+    def on_keyboard_event(event: Any, *_: Any) -> bool:
+        if event.type != carb.input.KeyboardEventType.KEY_PRESS:
+            return True
+        result = controller.press(event.input.name)
+        if result is not None:
+            print(f"[teleop] {result.message}", flush=True)
+        return True
+
+    subscription = input_interface.subscribe_to_keyboard_events(
+        keyboard,
+        on_keyboard_event,
+    )
+    steps = 0
+    print(
+        "[teleop] controls: TAB switch arm | 1-7 select shoulder-to-wrist joint | "
+        "LEFT/RIGHT jog -/+ 2 deg | O open | C close | Q or ESC quit",
+        flush=True,
+    )
+    print(
+        f"[teleop] active arm: {controller.side}; selected {controller.selected_joint_name}",
+        flush=True,
+    )
+    try:
+        while simulation_app.is_running() and not controller.quit_requested:
+            # The live JointPositionAction term consumes offsets from the
+            # configured reset default.  All non-jogged joints retain their
+            # captured reset targets, and the pure state object clamps each
+            # edited absolute target to the live soft joint limits.
+            action = (controller.absolute_targets - defaults).astype(np.float32)
+            _, _, _, _, _ = env.step(
+                torch.as_tensor(action, dtype=torch.float32, device=env.device).unsqueeze(0)
+            )
+            steps += 1
+    finally:
+        input_interface.unsubscribe_to_keyboard_events(keyboard, subscription)
+
+    reason = "keyboard_quit" if controller.quit_requested else "window_closed"
+    return {
+        "status": "PASS",
+        "reason": reason,
+        "steps": steps,
+        "mode": "manual_joint_jog",
+    }
+
+
 def _pose_payload(pose: Pose) -> dict[str, list[float]]:
     return {
         "position_world_m": pose.position.tolist(),
@@ -6336,6 +6443,16 @@ def main() -> int:
                 + json.dumps(reset_errors, sort_keys=True),
                 flush=True,
             )
+
+        if args.keyboard_teleop:
+            teleop_report = _run_keyboard_teleop(
+                env,
+                action_names,
+                current,
+                defaults,
+            )
+            print("[teleop] complete: " + json.dumps(teleop_report, sort_keys=True), flush=True)
+            return 0
 
         # Capture the design snapshot before diagnostics so all later planning
         # and reporting can reuse one immutable aggregate record rather than

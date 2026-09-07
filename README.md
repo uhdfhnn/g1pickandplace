@@ -62,8 +62,10 @@ python3 -m compileall -q src scripts tests
 git diff --check
 ~~~
 
-Current shared-tree validation: 168 tests passed; compilation and whitespace
-checks passed.
+Current keyboard-focused validation: 21 tests passed; compilation and
+whitespace checks passed. The latest full shared-tree run is blocked during
+collection by an unrelated in-progress shovel refactor that no longer exports
+`SHOVEL_HANDLE_SIZE_M`; the keyboard tests remain green.
 
 ## Visible quick start
 
@@ -83,6 +85,33 @@ output directory and prints its path. For the shovel instruction, `--rollout`
 is experimental: the current 45 mm candidate passes reset-time Gate21, but
 physical evidence is only PARTIAL and must not be treated as a Task 4 PASS
 until a complete evaluator-valid recording exists.
+
+## Keyboard teleoperation demo
+
+Launch the visible public Stack-RgyBlock scene in manual joint-jog mode:
+
+~~~bash
+cd g1pickandplace
+python3 scripts/run_demo.py --keyboard-teleop
+~~~
+
+Click the Isaac Sim viewport once so it has keyboard focus, then use:
+
+| Key | Action |
+| --- | --- |
+| `Tab` | switch between the right and left arm |
+| `1`–`7` | select a joint from shoulder pitch through wrist yaw |
+| `Left` / `Right` | decrease / increase the selected target by 2 degrees |
+| `O` / `C` | open / close the selected arm's Dex1 gripper |
+| `Q` or `Esc` | exit cleanly |
+
+Every joint target is clamped to the live simulator soft limits, and joints
+that have not been selected continue holding their captured reset positions.
+This is deliberately a transparent joint-space demo rather than Cartesian
+teleoperation: it performs no online IK and makes no autonomous task-success
+claim. It is also separate from the accepted open-loop path—it does not build
+an `OpenLoopPolicy`, save a trajectory, evaluate a task, or create a LeRobot
+episode. The wrapper prints a unique output directory containing `teleop.log`.
 
 ## Cosmos first-frame policy inference
 
@@ -159,11 +188,13 @@ src/g1pickplace/trajectory.py     immutable trajectory and open-loop player
 src/g1pickplace/evaluation.py     read-only metrics
 src/g1pickplace/lerobot_writer.py native LeRobot episode writer
 scripts/run_unitree_mvp.py        public Unitree integration and visible gates
-scripts/run_demo.py               single visible inspect/plan/rollout entry
+scripts/run_demo.py               visible autonomous and keyboard-teleop entry
 scripts/run_cosmos_inference.py   visible first-frame Cosmos dry-run entry
 scripts/replay_cosmos_action.py   validated G1 replay and MP4 wrapper
 scripts/preview_plan.py           simulator-free planner smoke test
 src/g1pickplace/cosmos_inference.py concat preprocessing and async Cosmos client
+src/g1pickplace/cosmos_replay.py  29-D decode, G1 IK compilation, video writer
+src/g1pickplace/keyboard_teleop.py limit-clamped dual-arm joint-jog state
 tests/                            dependency-light correctness tests
 spec/entrance_test_demo_design.md approved design source of truth
 ~~~

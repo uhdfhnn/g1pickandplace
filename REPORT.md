@@ -14,6 +14,29 @@ visible-GUI procedure is
 | Red-on-yellow stack | PASS on calibrated8, including native LeRobot Gate E |
 | Shovel tool use | PARTIAL physical evidence only; Gate21 preflight passed, but no successful scoop or completed valid recording |
 
+## Keyboard teleoperation deliverable
+
+The final deliverable also includes a visible keyboard teleoperation demo for
+the same public G1 29-DoF Dex1 Stack-RgyBlock scene:
+
+~~~bash
+python3 scripts/run_demo.py --keyboard-teleop
+~~~
+
+After focusing the Isaac Sim viewport, `Tab` switches arms, `1`–`7` selects a
+shoulder-to-wrist joint, the arrow keys jog the selected target by 2 degrees,
+`O`/`C` opens or closes that side's gripper, and `Q`/`Esc` exits. Targets are
+clamped against the live soft joint limits and all other joints hold their
+captured reset targets. The run is identified as `manual_joint_jog` in its
+`teleop.log` completion record.
+
+This optional manual mode is intentionally outside the autonomous entrance-test
+acceptance evidence. It exits before reset-snapshot planning, constructs no
+`OpenLoopPolicy`, performs no online IK, does not record a LeRobot episode, and
+does not report a manipulation PASS. Its purpose is operator inspection,
+joint-direction checks, and simple manual scene interaction without changing
+the validated open-loop deliverable.
+
 The accepted Task 1 red run physically lifted 0.074059 m, transported 0.133814
 m, measured 0.047375 m edge clearance for a 0.05 m request, left both
 distractors at 0 displacement, and ended at 0.000267 m/s. Its native episode
@@ -61,9 +84,11 @@ before rollout step zero, and OpenLoopPolicy ignores observations during replay.
 No private BrickSim, BrickBench, RoCoBrick, or related code/assets were used.
 Dex3 and Inspire are out of scope.
 
-Current dependency-light validation is 168 tests passed, compileall passed,
-and git diff --check passed. The final visible inspect and plan-only reruns also
-passed. Phase 0 versions, commit SHAs, ordered 33-joint
+Current keyboard-focused validation is 21 tests passed, with compileall and
+`git diff --check` also passing. The latest full shared-tree run is blocked at
+test collection by an unrelated in-progress shovel refactor that no longer
+exports `SHOVEL_HANDLE_SIZE_M`; no keyboard test fails. The final visible
+inspect and plan-only reruns also passed. Phase 0 versions, commit SHAs, ordered 33-joint
 action names, and URDF/USD compatibility are recorded in the canonical report.
 Observed Warp/DDS/deprecation/material/cleanup messages are summarized there;
 an actual simulator abort remains an environment failure. The approved-design
