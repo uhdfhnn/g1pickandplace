@@ -1,0 +1,127 @@
+#usda 1.0
+(
+    defaultPrim = "ShovelTool"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "ShovelTool" (
+    kind = "component"
+    prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+)
+{
+    float physics:mass = 0.12
+    # The centre of mass is in tool-local metres: 90 mm toward the metal blade
+    # on -Y, centred laterally on X, and 10 mm below the root on -Z. It lies
+    # inside the authored wedge footprint (-135 to -60 mm Y) and models a
+    # blade-heavy 0.12 kg toy shovel.  With auto-computed mass distribution,
+    # the new rear grip made gate task4_gripfix_gate_03 rock steadily at
+    # 0.11815 rad/s even after 150 fixed settle steps.  Moving the COM less
+    # negative can repeat that torque; moving it outside the blade footprint
+    # or below the table would be unphysical.  This fixed asset calibration
+    # must satisfy the unchanged 0.05 rad/s reset gate before any plan exists.
+    point3f physics:centerOfMass = (0.0, -0.090, -0.010)
+    bool physics:rigidBodyEnabled = true
+
+    # The rectangular handle alone receives dimensionless static/dynamic
+    # friction 20/15 with max-combine and zero restitution.  These deliberately
+    # large values implement the requested high-grip handle and exceed the
+    # public block's already validated 10/1.5 surface.  Lower values can repeat
+    # the rollout-01 slip; still larger values can amplify finger impulses.
+    # Binding this material only to the handle prevents the blade from sticking
+    # to the table.  It is a fixed asset property, never a feedback gain.
+    def Material "GripPhysicsMaterial" (
+        prepend apiSchemas = ["PhysicsMaterialAPI", "PhysxMaterialAPI"]
+    )
+    {
+        float physics:staticFriction = 20.0
+        float physics:dynamicFriction = 15.0
+        float physics:restitution = 0.0
+        token physxMaterial:frictionCombineMode = "max"
+    }
+
+    def Scope "Geometry"
+    {
+        # The root is one dynamic body. These three child colliders are fixed
+        # by hierarchy and never become independent simulator rigid bodies.
+        # The requested handle is a 35x150x45 mm rectangular prism: local X is
+        # the Dex1 left/right closing axis, local Y is its long axis toward the
+        # rear/robot, and local Z is up. The X width remains 35 mm and the Y
+        # length remains the Gate-11 150 mm physical-clearance calibration; the
+        # prior 160 mm handle overlapped the public torso AABB by 2.97 mm along
+        # world Y. Gate20 rejected the preceding 50 mm candidate: its upper
+        # envelope produced 66 exact left-elbow overlaps during tilt_blade_up.
+        # The 45 mm candidate lowers that upper envelope by 5 mm while retaining
+        # the fixed bottom and the rollout-04 estimated finger-center gap of
+        # about 5.3 mm. The old flat handle top was root-local +0.0175 m; the
+        # new half-height is 22.5 mm and the root-local +5 mm translation makes
+        # its bottom +0.005-0.0225 = -0.0175 m (unchanged) and its top
+        # +0.005+0.0225 = +0.0275 m, raising the top exactly 10 mm.
+        # ``xformOpOrder`` lists translate before scale, so +5 mm is an explicit
+        # root-local metre offset rather than a scaled size. Keeping the bottom
+        # fixed preserves the existing blade/table height; a lower handle can
+        # remain below the finger centers and fail to grasp, while a taller one
+        # can repeat the exact elbow collision or enter the table/fingers. The
+        # fixed X/Y dimensions, high-grip material, and child hierarchy remain
+        # unchanged. This provisional geometry must pass visible reset/viewport,
+        # all-waypoint Gate C swept-clearance, and physical grasp validation.
+        def Cube "handle" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            float size = 1
+            float3 xformOp:translate = (0.0, 0.0, 0.005)
+            float3 xformOp:scale = (0.0175, 0.075, 0.0225)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+            rel material:binding:physics = </ShovelTool/GripPhysicsMaterial> (
+                bindMaterialAs = "strongerThanDescendants"
+            )
+            color3f[] primvars:displayColor = [(0.24, 0.10, 0.035)]
+        }
+
+        # This convex mesh is a genuine 75 mm long by 90 mm wide wedge rather
+        # than a renamed flat box. Local -Y is the leading edge, +X spans the
+        # width, and +Z is up. Its front is 1 mm thick and its rear is 8 mm
+        # thick: the 7 mm rise over 75 mm gives a 5.33 degree ramp, shallow
+        # enough to approach the public 50 mm cube without disabling table
+        # collision. A steeper wedge tends to shove the cube; a thinner lip is
+        # numerically fragile at the public 1 mm rest offset. This is a fixed
+        # first-pass geometry that needs visible contact validation.
+        def Mesh "shallow_wedge_blade" (
+            prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+        )
+        {
+            uniform token physics:approximation = "convexHull"
+            point3f[] points = [
+                (-0.045, -0.135, -0.017), (0.045, -0.135, -0.017),
+                (-0.045, -0.135, -0.016), (0.045, -0.135, -0.016),
+                (-0.045, -0.060, -0.017), (0.045, -0.060, -0.017),
+                (-0.045, -0.060, -0.009), (0.045, -0.060, -0.009)
+            ]
+            int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+            int[] faceVertexIndices = [
+                0, 4, 5, 1,
+                2, 3, 7, 6,
+                0, 2, 6, 4,
+                1, 5, 7, 3,
+                0, 1, 3, 2,
+                4, 6, 7, 5
+            ]
+            uniform token subdivisionScheme = "none"
+            color3f[] primvars:displayColor = [(0.64, 0.67, 0.72)]
+        }
+
+        # The backstop is fixed to the same root and keeps a contacted block
+        # from sliding through the blade during a provisional tilt.
+        def Cube "backstop" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            float size = 1
+            float3 xformOp:scale = (0.045, 0.006, 0.0175)
+            float3 xformOp:translate = (0.0, -0.052, 0.0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.48, 0.50, 0.54)]
+        }
+    }
+}

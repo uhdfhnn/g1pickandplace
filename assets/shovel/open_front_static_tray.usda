@@ -1,0 +1,80 @@
+#usda 1.0
+(
+    defaultPrim = "TargetTray"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+# The tray is intentionally an Xform without RigidBodyAPI.  Each child is a
+# static collision shape. With the identity tray pose, world +Y is the open
+# side facing the robot and world -Y is the closed rear; this matches the
+# shovel's away-from-robot travel direction.
+def Xform "TargetTray" (
+    kind = "component"
+)
+{
+    def Scope "Geometry"
+    {
+        def Cube "floor" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            float size = 1
+            float3 xformOp:scale = (0.11, 0.08, 0.005)
+            float3 xformOp:translate = (0.0, 0.0, 0.0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+            color3f[] primvars:displayColor = [(0.08, 0.28, 0.72)]
+        }
+
+        def Cube "left_side" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            float size = 1
+            # Each side wall is 10 mm thick in local X, 150 mm long in local
+            # Y, and 50 mm tall in local Z. Its centre at -105 mm and the
+            # matching +105 mm wall leave 200 mm clear width for the 50 mm
+            # cube. Thicker walls shrink the supported interior; thinner walls
+            # are prone to tunnelling. These fixed values come from the
+            # 220x160 mm tray envelope and need visible validation.
+            float3 xformOp:scale = (0.005, 0.075, 0.025)
+            float3 xformOp:translate = (-0.105, -0.005, 0.025)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "right_side" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            float size = 1
+            float3 xformOp:scale = (0.005, 0.075, 0.025)
+            float3 xformOp:translate = (0.105, -0.005, 0.025)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "rear" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            float size = 1
+            # The rear wall spans 200 mm in local X and closes local -Y at
+            # -75 mm. Keeping +Y open provides a 10 mm-high entry ramp rather
+            # than a wall the cube would have to cross.
+            float3 xformOp:scale = (0.10, 0.005, 0.025)
+            float3 xformOp:translate = (0.0, -0.075, 0.025)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        # The ramp is shallow and static. It is open at world +Y and only
+        # guides a released block onto the floor; it is never animated.
+        def Cube "front_ramp" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            float size = 1
+            float3 xformOp:scale = (0.10, 0.015, 0.006)
+            float3 xformOp:translate = (0.0, 0.072, 0.008)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+    }
+}

@@ -14,7 +14,13 @@ dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-isaac = ["pin>=3.0"]
+# Pinocchio 2.7.0 is the exact solver ABI used by the accepted visible runs with
+# the validated cmeel/HPP-FCL stack. Moving higher can reintroduce the Assimp
+# symbol collision or change IK results. It is intentionally fixed and should
+# move only after a visible gate and the dependency-light suite pass. LeRobot's
+# dataset-only stack is installed separately from requirements-recording.txt so
+# its unrelated training dependencies cannot replace Isaac Sim packages.
+isaac = ["pin==2.7.0"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

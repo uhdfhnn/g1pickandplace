@@ -1,207 +1,137 @@
-# Unitree G1 Pick-and-Place MVP
+# Unitree G1 pick-and-place entrance demo
 
-Independent **reset-time open-loop IK** baseline for the public Unitree G1 red-block task in NVIDIA Isaac Lab, plus native LeRobot demonstration recording.
+This repository implements a reset-time, open-loop IK baseline for the public
+Unitree G1 29-DoF Dex1 environment. The approved scene is
+Isaac-Stack-RgyBlock-G129-Dex1-Joint: public warehouse, packing table, yellow
+marker, red/yellow/green blocks, G1, Dex1, and public RGB cameras.
 
-> **Current validation status:** all dependency-light code and 11 unit tests pass. The repository was authored without an Isaac Sim GPU runtime, so the simulator entry point has not yet been executed end to end. The first GPU pass must verify the local Unitree/Isaac Lab versions, URDF-to-USD joint/frame alignment, wrist offset/orientation, and Dex1 close values before this can be reported as a successful physical interaction.
+## Current acceptance status
 
-## What this MVP does
+| Task | Status |
+| --- | --- |
+| Task 1: red block left of yellow marker | PASS; visible rollout and native LeRobot episode |
+| Task 2: instruction-conditioned selection | PASS for validated green/right instruction; red/yellow plan-gated |
+| Task 3: red block stacked on yellow | PASS; calibrated8 visible gates, physical result, and Gate E episode |
+| Task 4: shovel scoop | PARTIAL physical evidence only; no successful scoop or completed valid recording |
 
-The default backend is Unitree's public direct-joint task:
+The detailed evidence, hashes, metrics, versions, and risks are in
+[docs/ENTRANCE_TEST_REPORT.md](docs/ENTRANCE_TEST_REPORT.md). The copyable
+visible-GUI commands are in
+[docs/RUN_ENTRANCE_TEST_DEMO.md](docs/RUN_ENTRANCE_TEST_DEMO.md).
 
-```text
-Isaac-PickPlace-RedBlock-G129-Dex1-Joint
-```
+## Setup from Git
 
-It uses the easy built-in red cuboid and two-finger Dex1 gripper. At reset it:
+The reproducible setup starts with a normal clone and installs the validated
+public dependency checkouts as siblings:
 
-1. lets physics settle;
-2. snapshots the robot joints, robot base pose, object pose, and fixed target pose once;
-3. solves every Cartesian waypoint through an independent Pinocchio damped-least-squares backend;
-4. converts all solved configurations into an immutable joint trajectory;
-5. starts rollout only after all IK calls have completed.
+~~~bash
+git clone https://github.com/uhdfhnn/g1pickandplace.git
+cd g1pickandplace
+bash scripts/setup_environment.sh
+~~~
 
-During rollout:
+The bootstrap pins the Unitree, Isaac Lab, ROS-description, SDK, CycloneDDS,
+Pinocchio, and LeRobot versions used by the accepted runs. Requirements,
+hardware notes, Assimp handling, validation, and manual recovery are documented
+in [SETUP.md](SETUP.md).
 
-```python
-def act(self, observation=None):
-    del observation
-    action = self.trajectory.action_at(self.step)
-    self.step += 1
-    return action
-```
+## Safety and architecture
 
-There is no online IK, replanning, pose-error transition, contact-triggered branch, recovery controller, or action dependence on the observation. Cameras and object state are used only for recording and final evaluation.
+The runner snapshots all three block poses once after reset, parses a finite
+instruction, selects exactly one object, solves every IK waypoint, compiles an
+immutable joint/action array, and performs limits/collision/clearance checks
+before constructing OpenLoopPolicy. Its act method is observation-invariant:
+observations are recorded/evaluated only and never change the action sequence.
 
-## Manipulation program
+There is no rollout-time IK, replanning, contact/error/reward transition,
+recovery, attachment, weld, teleport, or kinematic object write. Every
+physical run must follow visible inspect-only -> visible plan-only -> visible
+rollout, and must stop if any reset-time solve or preflight gate fails.
 
-```text
-open_at_home
-→ move_to_pregrasp
-→ descend_to_grasp
-→ close_gripper
-→ grasp_settle
-→ lift
-→ transport
-→ descend_to_place
-→ open_gripper
-→ release_settle
-→ retreat
-→ return_home
-```
+This project uses public Unitree, Isaac Lab, Pinocchio, and LeRobot APIs/assets.
+It does not access, copy, imitate, translate, or port BrickSim, BrickBench,
+RoCoBrick, or related private code/assets. Dex3 and Inspire are out of scope.
 
-All transitions are compiled into time-indexed joint targets before rollout.
+## Dependency-light checks
 
-## Independence and provenance
+From the repository root:
 
-This repository does **not** copy, paste, port, translate, mechanically rewrite, or import code from BrickSim, BrickBench, RoCoBrick, or related private repositories. Generic phases such as approach, grasp, lift, transport, release, and retreat are standard robotics concepts. The implementation uses public Unitree, Isaac Lab, Pinocchio, and LeRobot interfaces and is intentionally organized differently from the private waypoint policy shown during planning.
+~~~bash
+python3 -m pytest -q
+python3 -m compileall -q src scripts tests
+git diff --check
+~~~
 
-See [`docs/REFERENCES.md`](docs/REFERENCES.md) for the public sources reviewed.
+Current shared-tree validation: 168 tests passed; compilation and whitespace
+checks passed.
 
-## Repository layout
+## Visible quick start
 
-```text
-src/g1pickplace/geometry.py       rigid transforms and quaternion conversion
+The single entry point requires an instruction. By default it opens visible
+inspect-only and plan-only gates in order and stops before rollout:
+
+~~~bash
+cd g1pickandplace
+python3 scripts/run_demo.py \
+  --instruction "Pick up the red block and stack it on the yellow block."
+~~~
+
+Add `--rollout` to the same command to request physical execution and native
+LeRobot recording. The wrapper still runs visible inspect and plan first and
+fails closed without starting rollout if either gate fails. It creates a unique
+output directory and prints its path. For the shovel instruction, `--rollout`
+is experimental: the current 45 mm candidate passes reset-time Gate21, but
+physical evidence is only PARTIAL and must not be treated as a Task 4 PASS
+until a complete evaluator-valid recording exists.
+
+## Cosmos first-frame policy inference
+
+The inference-only entry point starts the same visible public Unitree scene,
+captures the settled first RGB frame from the front, left-wrist, and
+right-wrist cameras, builds the Cosmos `concat_view`, and calls the asynchronous
+Cosmos policy endpoint. Open the documented SSH tunnel first:
+
+~~~bash
+ssh -L 8080:localhost:8080 <user>@<cosmos-host>
+curl http://localhost:8080/v1/models
+~~~
+
+Then run the simulation and one inference in another terminal:
+
+~~~bash
+cd g1pickandplace
+python3 scripts/run_cosmos_inference.py \
+  --base-url http://localhost:8080 \
+  --duration-s 16 \
+  --instruction "Pick up the red block and stack it on the yellow block." \
+  --output-dir outputs/cosmos_stack_red_on_yellow_16s
+~~~
+
+The output directory contains `unitree_concat_view.png`,
+`cosmos_policy_action.json`, `metadata.json`, `sim_inference_context.npz`, and
+the simulator log. This path is deliberately dry-run only: Cosmos returns a
+normalized AgiBotWorld end-effector action, not the G1 environment's ordered
+joint command. The wrapper defaults to 16 seconds, producing 160 actions at the
+model's 10 Hz rate (`num_frames=161`). The result is validated and saved
+together with the initial G1 state, but never passed to `env.step`.
+
+## Repository map
+
+~~~text
+src/g1pickplace/geometry.py       rigid transforms and quaternion utilities
 src/g1pickplace/offline_ik.py     reset-time Pinocchio frame IK
-src/g1pickplace/planner.py        semantic pick/place program and IK compilation
-src/g1pickplace/trajectory.py     immutable joint trajectory and open-loop player
-src/g1pickplace/evaluation.py     non-controlling success metrics
-src/g1pickplace/lerobot_writer.py native LeRobot v3 writer
-scripts/run_unitree_mvp.py        Unitree Isaac Lab integration
+src/g1pickplace/planner.py        semantic pick/place compiler
+src/g1pickplace/trajectory.py     immutable trajectory and open-loop player
+src/g1pickplace/evaluation.py     read-only metrics
+src/g1pickplace/lerobot_writer.py native LeRobot episode writer
+scripts/run_unitree_mvp.py        public Unitree integration and visible gates
+scripts/run_demo.py               single visible inspect/plan/rollout entry
+scripts/run_cosmos_inference.py   visible first-frame Cosmos dry-run entry
 scripts/preview_plan.py           simulator-free planner smoke test
-scripts/check_install.py          runtime dependency check
+src/g1pickplace/cosmos_inference.py concat preprocessing and async Cosmos client
 tests/                            dependency-light correctness tests
-docs/                             design, research, and runbook notes
-```
+spec/entrance_test_demo_design.md approved design source of truth
+~~~
 
-## Install
-
-First install the public Unitree simulation repository and its supported Isaac Sim / Isaac Lab environment. Set its checkout path:
-
-```bash
-export UNITREE_SIM_ISAACLAB_ROOT=/absolute/path/to/unitree_sim_isaaclab
-export PROJECT_ROOT="$UNITREE_SIM_ISAACLAB_ROOT"
-```
-
-Install this package in the same Python environment:
-
-```bash
-python -m pip install -e '.[dev]'
-python scripts/check_install.py
-```
-
-The strict offline solver also needs a fixed-base public G1 29-DoF URDF and Pinocchio (`pin`). Do not use the simulator USD as an implicit kinematic model: pass the exact URDF explicitly and confirm that its joint names and `right_wrist_yaw_link` frame match the loaded USD.
-
-## Test without Isaac Sim
-
-```bash
-python -m pytest
-python scripts/preview_plan.py --output outputs/preview_trajectory.npz
-```
-
-The preview uses a fake IK backend only to validate planning, trajectory compilation, action offset conversion, and observation invariance. It is not a manipulation result.
-
-## Run the simulator MVP
-
-Example from an activated Isaac Lab environment:
-
-```bash
-python scripts/run_unitree_mvp.py \
-  --unitree-root "$UNITREE_SIM_ISAACLAB_ROOT" \
-  --urdf /absolute/path/to/g1_29dof.urdf \
-  --package-dir /absolute/path/to/g1_description \
-  --task Isaac-PickPlace-RedBlock-G129-Dex1-Joint \
-  --device cuda:0 \
-  --enable_cameras
-```
-
-Headless data collection:
-
-```bash
-python scripts/run_unitree_mvp.py \
-  --unitree-root "$UNITREE_SIM_ISAACLAB_ROOT" \
-  --urdf /absolute/path/to/g1_29dof.urdf \
-  --package-dir /absolute/path/to/g1_description \
-  --device cuda:0 \
-  --headless \
-  --enable_cameras \
-  --record-root datasets/g1_pickplace_mvp \
-  --dataset-repo-id local/g1-pickplace-mvp
-```
-
-State/action-only fallback:
-
-```bash
-python scripts/run_unitree_mvp.py \
-  --unitree-root "$UNITREE_SIM_ISAACLAB_ROOT" \
-  --urdf /absolute/path/to/g1_29dof.urdf \
-  --headless \
-  --no-video \
-  --record-root datasets/g1_pickplace_state_only
-```
-
-## First GPU validation checklist
-
-1. Confirm that `Isaac-PickPlace-RedBlock-G129-Dex1-Joint` appears in the local task list and resets.
-2. Confirm the simulator quaternion convention. The Unitree 4.5-style configs use `wxyz`; newer Isaac Lab builds may use `xyzw`. Set `--sim-quaternion-order` explicitly.
-3. Confirm that the action term resolves to the same ordered joint names as `robot.data.joint_names`; the runner reads and validates the resolved action order.
-4. Confirm the fixed-base URDF matches the USD's 29 body-joint names and base frame.
-5. Confirm the configured end-effector frame exists. The default is `right_wrist_yaw_link`.
-6. Run only through trajectory compilation first. Reject the episode if any waypoint fails IK.
-7. Inspect the pregrasp pose and tune `--grasp-wrist-offset-world` and `--grasp-quaternion-base-xyzw`.
-8. Confirm Dex1 open/close signs and limits. Public Unitree code maps roughly `0.03` open to `-0.02` closed, but the loaded asset is authoritative.
-9. Verify genuine rigid contact: no teleport, weld, object attachment, or hidden pose reset.
-10. Run ten fixed-seed trials, report failure modes, then enable bounded reset variants.
-11. Inspect one written LeRobot episode and replay it before collecting a large dataset.
-
-Useful tuning flags:
-
-```bash
---target-position=-4.05,-4.03,0.84
---grasp-wrist-offset-world=0.0,0.0,0.08
---grasp-quaternion-base-xyzw=0.0,0.0,0.0,1.0
---gripper-open=0.03,0.03
---gripper-closed=-0.02,-0.02
---sim-quaternion-order=wxyz
-```
-
-Do not assume the identity grasp quaternion is correct; omitting the flag preserves the reset end-effector orientation.
-
-## LeRobot data
-
-Each episode can contain:
-
-| Feature | Meaning |
-|---|---|
-| `observation.state` | ordered absolute robot joint positions |
-| `observation.images.front` | head/front RGB, when available |
-| `observation.images.right_wrist` | right wrist RGB, when available |
-| `action` | exact default-offset joint action sent to Isaac Lab |
-| `observation.object_pose` | privileged object pose for diagnosis/evaluation |
-| `observation.target_pose` | target annotation |
-| `observation.phase_index` | diagnostic program phase, not required as policy input |
-| `task` | natural-language instruction |
-
-The writer uses the public LeRobot lifecycle:
-
-```text
-LeRobotDataset.create → add_frame → save_episode → finalize
-```
-
-## Success criterion
-
-The final evaluator requires:
-
-- object center within the target's XY half-extents;
-- object height near the target surface;
-- final linear speed below the stability threshold.
-
-The evaluator is read-only with respect to control.
-
-## Scope after MVP
-
-Only after Task 1 has a reproducible success rate and valid LeRobot episodes:
-
-1. add a second distractor and text-conditioned single-object selection;
-2. add bounded setup variants and reset-time reachability rejection;
-3. add the pusher-and-puck tool task, with two-object stacking as fallback;
-4. optionally integrate an existing policy for inference-only evaluation.
+Historical calibration logs remain under outputs/ and are labeled in the final
+report; they should not be confused with the current approved baseline.

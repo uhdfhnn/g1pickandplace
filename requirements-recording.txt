@@ -1,0 +1,36 @@
+# Minimal native LeRobot-dataset stack from the accepted recordings. These
+# versions identify Python distributions (no physical units or coordinate
+# frame). They were captured from the environment that wrote, finalized,
+# reopened, and decoded the evaluator-valid episodes. Lower versions may lack
+# the exercised v3 schema/video behavior; higher versions may change encoding,
+# Parquet, or Hugging Face APIs. The setup script installs this file with
+# --no-deps because LeRobot's unused policy/training extras conflict with Isaac
+# Sim's bundled packages. Change the set only after a dataset round-trip and
+# visible rollout validation.
+lerobot==0.4.4
+datasets==4.8.4
+pyarrow==25.0.1
+av==15.0.0
+imageio==2.37.0
+imageio-ffmpeg==0.6.0
+pandas==3.0.5
+huggingface-hub==0.35.2
+jsonlines==4.0.0
+xxhash==4.0.1
+multiprocess==0.70.19
+dill==0.4.1
+tqdm==4.70.0
+
+# These dependencies are also supplied by Isaac Sim on the validated host, but
+# their exact releases are repeated here so a clean Conda installation does not
+# depend on NVIDIA's incidental prebundle lookup order. Newer/older releases can
+# change dataset I/O or resolver behavior. Packaging 23.0 is below LeRobot's
+# broad full-stack declaration yet is the validated dataset-only runtime; policy
+# training is explicitly outside this project's scope.
+requests==2.32.3
+fsspec==2024.6.1
+filelock==3.13.1
+PyYAML==6.0.2
+packaging==23.0
+aiohttp==3.11.11
+Pillow==11.2.1

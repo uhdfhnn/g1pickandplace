@@ -10,6 +10,13 @@ dist/
 outputs/
 datasets/
 videos/
+# Packaged evaluator evidence is generated from outputs and currently exceeds
+# GitHub's regular-file limit (the archive is about 167 MB).  It is intentionally
+# kept outside source Git; publish a verified archive as a release asset or with
+# Git LFS if distribution is required.  Removing this rule risks making ordinary
+# clones large or causing pushes to fail, while keeping it has no effect on code,
+# tests, small scene assets, or reproducibility from the recorded manifests.
+deliverables/
 *.npz
 *.mp4
 .omniverse/
